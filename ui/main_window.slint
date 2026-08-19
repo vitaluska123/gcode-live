@@ -1,4 +1,9 @@
+
+import { Button, LineEdit, GroupBox } from "std-widgets.slint";
+
+// ============================================================
 // PCB Frame Generator - Main Window UI
+// ============================================================
 
 export global UiSettings {
     in-out property<float> offset_x: 10.0;
@@ -19,12 +24,15 @@ export component MainWindow inherits Window {
 
     in-out property<string> board_width: "";
     in-out property<string> board_height: "";
+
     in-out property<string> x_min: "";
     in-out property<string> x_max: "";
     in-out property<string> y_min: "";
     in-out property<string> y_max: "";
+
     in-out property<string> frame_width: "";
     in-out property<string> frame_height: "";
+
     in-out property<bool> file_loaded: false;
     in-out property<image> preview_image;
 
@@ -35,194 +43,438 @@ export component MainWindow inherits Window {
     callback update_preview();
     callback render_preview(float, float) -> image;
 
+
+    // ========================================================
+    // MAIN LAYOUT
+    // ========================================================
+
     HorizontalLayout {
-        spacing: 10px;
-        padding: 10px;
+        padding: 12px;
+        spacing: 12px;
+
+        // ====================================================
+        // LEFT PANEL
+        // ====================================================
 
         VerticalLayout {
-            preferred-width: 350px;
-            spacing: 15px;
+            preferred-width: 340px;
+            spacing: 12px;
 
-            Rectangle {
-                background: #e8e8e8;
-                border-radius: 5px;
-                preferred-height: 400px;
+
+            // =================================================
+            // SETTINGS
+            // =================================================
+
+            GroupBox {
+                title: "Settings";
 
                 VerticalLayout {
-                    spacing: 8px;
-                    padding: 10px;
+                    padding: 8px;
+                    spacing: 6px;
 
-                    Text { text: "Settings"; font-size: 16px; font-weight: 600; }
 
-                    Text { text: "Offset X (mm):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.offset_x + "";
-                        accepted => { UiSettings.offset_x = self.text.to-float(); }
+                    HorizontalLayout {
+                        Text {
+                            text: "Offset X (mm):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.offset_x + "";
+
+                            horizontal-stretch: 1;
+
+                            accepted => {
+                                UiSettings.offset_x = self.text.to-float();
+                            }
+                        }
                     }
 
-                    Text { text: "Offset Y (mm):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.offset_y + "";
-                        accepted => { UiSettings.offset_y = self.text.to-float(); }
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Offset Y (mm):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.offset_y + "";
+
+                            horizontal-stretch: 1;
+
+                            accepted => {
+                                UiSettings.offset_y = self.text.to-float();
+                            }
+                        }
                     }
 
-                    Text { text: "Clamp Zone (mm):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.clamp_zone + "";
-                        accepted => { UiSettings.clamp_zone = self.text.to-float(); }
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Clamp Zone (mm):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.clamp_zone + "";
+
+                            horizontal-stretch: 1;
+
+                            accepted => {
+                                UiSettings.clamp_zone = self.text.to-float();
+                            }
+                        }
                     }
 
-                    Text { text: "Safe Zone (mm):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.safe_zone + "";
-                        accepted => { UiSettings.safe_zone = self.text.to-float(); }
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Safe Zone (mm):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.safe_zone + "";
+
+                            horizontal-stretch: 1;
+
+                            accepted => {
+                                UiSettings.safe_zone = self.text.to-float();
+                            }
+                        }
                     }
 
-                    Text { text: "Tool Diameter (mm):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.tool_diameter + "";
-                        accepted => { UiSettings.tool_diameter = self.text.to-float(); }
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Tool Diameter (mm):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.tool_diameter + "";
+
+                            horizontal-stretch: 1;
+
+                            accepted => {
+                                UiSettings.tool_diameter = self.text.to-float();
+                            }
+                        }
                     }
 
-                    Text { text: "Cut Depth (mm):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.cut_depth + "";
-                        accepted => { UiSettings.cut_depth = self.text.to-float(); }
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Cut Depth (mm):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.cut_depth + "";
+
+                            horizontal-stretch: 1;
+
+                            accepted => {
+                                UiSettings.cut_depth = self.text.to-float();
+                            }
+                        }
                     }
 
-                    Text { text: "Step Depth (mm):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.step_depth + "";
-                        accepted => { UiSettings.step_depth = self.text.to-float(); }
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Step Depth (mm):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.step_depth + "";
+
+                            horizontal-stretch: 1;
+
+                            accepted => {
+                                UiSettings.step_depth = self.text.to-float();
+                            }
+                        }
                     }
 
-                    Text { text: "Feed Rate (mm/min):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.feed_rate + "";
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Feed Rate (mm/min):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.feed_rate + "";
+
+                            horizontal-stretch: 1;
+
+                            // Integer conversion is handled by Rust.
+                            accepted => {
+                                root.update_preview();
+                            }
+                        }
                     }
 
-                    Text { text: "Spindle Speed (RPM):"; font-size: 14px; }
-                    TextInput {
-                        text: UiSettings.spindle_speed + "";
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Spindle Speed (RPM):";
+                            vertical-alignment: center;
+                        }
+
+                        LineEdit {
+                            text: UiSettings.spindle_speed + "";
+
+                            horizontal-stretch: 1;
+
+                            // Integer conversion is handled by Rust.
+                            accepted => {
+                                root.update_preview();
+                            }
+                        }
                     }
                 }
             }
 
-            VerticalLayout {
-                spacing: 8px;
 
-                Rectangle {
-                    background: #4a90d9;
-                    border-radius: 5px;
-                    min-height: 40px;
-                    min-width: 200px;
-                    Text {
+            // =================================================
+            // ACTIONS
+            // =================================================
+
+            GroupBox {
+                title: "Actions";
+
+                VerticalLayout {
+                    padding: 8px;
+                    spacing: 6px;
+
+                    Button {
                         text: "Open TAP";
-                        color: white;
-                        font-size: 14px;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                    }
-                    TouchArea { clicked => { root.open_tap_file(); } }
-                }
 
-                Rectangle {
-                    background: #4a90d9;
-                    border-radius: 5px;
-                    min-height: 40px;
-                    min-width: 200px;
-                    Text {
+                        clicked => {
+                            root.open_tap_file();
+                        }
+                    }
+
+
+                    Button {
                         text: "Save Settings";
-                        color: white;
-                        font-size: 14px;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                    }
-                    TouchArea { clicked => { root.save_settings(); } }
-                }
 
-                Rectangle {
-                    background: root.file_loaded ? #4a90d9 : #cccccc;
-                    border-radius: 5px;
-                    min-height: 40px;
-                    min-width: 200px;
-                    Text {
-                        text: "Export TAP";
-                        color: white;
-                        font-size: 14px;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
+                        clicked => {
+                            root.save_settings();
+                        }
                     }
-                    TouchArea {
+
+
+                    Button {
+                        text: "Export TAP";
                         enabled: root.file_loaded;
-                        clicked => { root.export_tap(); }
+
+                        clicked => {
+                            root.export_tap();
+                        }
                     }
                 }
             }
 
-            Rectangle {
-                background: #e8e8e8;
-                border-radius: 5px;
+
+            // =================================================
+            // FILE INFORMATION
+            // =================================================
+
+            GroupBox {
+                title: "File Information";
 
                 VerticalLayout {
+                    padding: 8px;
                     spacing: 5px;
-                    padding: 10px;
 
-                    Text { text: "File Information"; font-size: 16px; font-weight: 600; }
 
-                    Text { text: "Board Dimensions:"; font-weight: 600; }
-                    Text { text: "Width: " + root.board_width; }
-                    Text { text: "Height: " + root.board_height; }
+                    Text {
+                        text: "Board Dimensions";
+                        font-weight: 600;
+                    }
 
-                    Rectangle { height: 1px; background: gray; }
 
-                    Text { text: "Board Bounds:"; font-weight: 600; }
-                    Text { text: "X Min: " + root.x_min; }
-                    Text { text: "X Max: " + root.x_max; }
-                    Text { text: "Y Min: " + root.y_min; }
-                    Text { text: "Y Max: " + root.y_max; }
+                    HorizontalLayout {
+                        Text {
+                            text: "Width:";
+                        }
 
-                    Rectangle { height: 1px; background: gray; }
+                        Text {
+                            text: root.board_width;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
 
-                    Text { text: "Frame Dimensions:"; font-weight: 600; }
-                    Text { text: "Width: " + root.frame_width; }
-                    Text { text: "Height: " + root.frame_height; }
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Height:";
+                        }
+
+                        Text {
+                            text: root.board_height;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+
+                    Text {
+                        text: "Board Bounds";
+                        font-weight: 600;
+                    }
+
+
+                    HorizontalLayout {
+                        Text {
+                            text: "X Min:";
+                        }
+
+                        Text {
+                            text: root.x_min;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+
+                    HorizontalLayout {
+                        Text {
+                            text: "X Max:";
+                        }
+
+                        Text {
+                            text: root.x_max;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Y Min:";
+                        }
+
+                        Text {
+                            text: root.y_min;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Y Max:";
+                        }
+
+                        Text {
+                            text: root.y_max;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+
+                    Text {
+                        text: "Frame Dimensions";
+                        font-weight: 600;
+                    }
+
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Width:";
+                        }
+
+                        Text {
+                            text: root.frame_width;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
+
+
+                    HorizontalLayout {
+                        Text {
+                            text: "Height:";
+                        }
+
+                        Text {
+                            text: root.frame_height;
+                            horizontal-alignment: right;
+                            horizontal-stretch: 1;
+                        }
+                    }
                 }
+            }
+
+
+            // Fill unused vertical space.
+            Rectangle {
+                vertical-stretch: 1;
             }
         }
 
-        Rectangle {
-            background: #f0f0f0;
-            border-radius: 5px;
 
-            VerticalLayout {
+        // ====================================================
+        // RIGHT PANEL - PREVIEW
+        // ====================================================
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: 8px;
+
+
+            Text {
+                text: "Preview";
+                font-weight: 600;
+            }
+
+
+            Rectangle {
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
+
                 Image {
                     source: root.preview_image;
+
                     width: 100%;
                     height: 100%;
+
                     image-fit: contain;
                 }
+            }
+
+
+            HorizontalLayout {
+                spacing: 20px;
+
+
+                Text {
+                    text: "Board: "
+                        + root.board_width
+                        + " × "
+                        + root.board_height;
+                }
+
+
+                Text {
+                    text: "Frame: "
+                        + root.frame_width
+                        + " × "
+                        + root.frame_height;
+                }
+
 
                 Rectangle {
-                    background: white;
-                    border-radius: 3px;
-                    width: 150px;
-                    height: 60px;
-
-                    VerticalLayout {
-                        padding: 5px;
-                        spacing: 3px;
-
-                        HorizontalLayout {
-                            Rectangle { width: 20px; height: 3px; background: #0064c8; }
-                            Text { text: "Board"; font-size: 12px; }
-                        }
-
-                        HorizontalLayout {
-                            Rectangle { width: 20px; height: 3px; background: red; }
-                            Text { text: "Frame"; font-size: 12px; }
-                        }
-                    }
+                    horizontal-stretch: 1;
                 }
             }
         }
