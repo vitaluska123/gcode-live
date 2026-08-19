@@ -116,25 +116,4 @@ impl PreviewData {
         (sx, sy)
     }
 
-    /// Get board rectangle corners
-    pub fn board_corners(&self) -> Vec<(f64, f64)> {
-        vec![
-            (self.board_x_min, self.board_y_min),
-            (self.board_x_max, self.board_y_min),
-            (self.board_x_max, self.board_y_max),
-            (self.board_x_min, self.board_y_max),
-            (self.board_x_min, self.board_y_min),
-        ]
-    }
-
-    /// Get frame rectangle corners
-    pub fn frame_corners(&self) -> Vec<(f64, f64)> {
-        vec![
-            (self.frame_left, self.frame_bottom),
-            (self.frame_right, self.frame_bottom),
-            (self.frame_right, self.frame_top),
-            (self.frame_left, self.frame_top),
-            (self.frame_left, self.frame_bottom),
-        ]
-    }
 }

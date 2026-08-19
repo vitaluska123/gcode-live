@@ -15,10 +15,6 @@ export global UiSettings {
     in-out property<float> step_depth: 0.4;
     in-out property<float> feed_rate: 120;
     in-out property<float> spindle_speed: 800;
-    in-out property<bool> show-offset: true;
-    in-out property<bool> show-clamp: true;
-    in-out property<bool> show-safe: true;
-    in-out property<bool> show-tool: true;
 }
 
 export component MainWindow inherits Window {
@@ -107,7 +103,7 @@ export component MainWindow inherits Window {
                         LineEdit {
                             text: UiSettings.offset_x + "";
 
-                            horizontal-stretch: 1;
+                            preferred-width: 90px;
 
                             accepted => {
                                 UiSettings.offset_x = self.text.to-float();
@@ -126,7 +122,7 @@ export component MainWindow inherits Window {
                         LineEdit {
                             text: UiSettings.offset_y + "";
 
-                            horizontal-stretch: 1;
+                            preferred-width: 90px;
 
                             accepted => {
                                 UiSettings.offset_y = self.text.to-float();
@@ -136,137 +132,6 @@ export component MainWindow inherits Window {
                     }
 
 
-                    HorizontalLayout {
-                        Text {
-                            text: "Зона зажимов (мм):";
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            text: UiSettings.clamp_zone + "";
-
-                            horizontal-stretch: 1;
-
-                            accepted => {
-                                UiSettings.clamp_zone = self.text.to-float();
-                                root.update_preview();
-                            }
-                        }
-                    }
-
-
-                    HorizontalLayout {
-                        Text {
-                            text: "Безопасная зона (мм):";
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            text: UiSettings.safe_zone + "";
-
-                            horizontal-stretch: 1;
-
-                            accepted => {
-                                UiSettings.safe_zone = self.text.to-float();
-                                root.update_preview();
-                            }
-                        }
-                    }
-
-
-                    HorizontalLayout {
-                        Text {
-                            text: "Диаметр инструмента (мм):";
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            text: UiSettings.tool_diameter + "";
-
-                            horizontal-stretch: 1;
-
-                            accepted => {
-                                UiSettings.tool_diameter = self.text.to-float();
-                                root.update_preview();
-                            }
-                        }
-                    }
-
-
-                    HorizontalLayout {
-                        Text {
-                            text: "Cut Depth (mm):";
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            text: UiSettings.cut_depth + "";
-
-                            horizontal-stretch: 1;
-
-                            accepted => {
-                                UiSettings.cut_depth = self.text.to-float();
-                                root.update_preview();
-                            }
-                        }
-                    }
-
-
-                    HorizontalLayout {
-                        Text {
-                            text: "Step Depth (mm):";
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            text: UiSettings.step_depth + "";
-
-                            horizontal-stretch: 1;
-
-                            accepted => {
-                                UiSettings.step_depth = self.text.to-float();
-                                root.update_preview();
-                            }
-                        }
-                    }
-
-
-                    HorizontalLayout {
-                        Text {
-                            text: "Feed Rate (mm/min):";
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            text: UiSettings.feed_rate + "";
-
-                            horizontal-stretch: 1;
-
-                            accepted => {
-                                UiSettings.feed_rate = self.text.to-float();
-                                root.update_preview();
-                            }
-                        }
-                    }
-
-
-                    HorizontalLayout {
-                        Text {
-                            text: "Spindle Speed (RPM):";
-                            vertical-alignment: center;
-                        }
-
-                        LineEdit {
-                            text: UiSettings.spindle_speed + "";
-
-                            horizontal-stretch: 1;
-
-                            accepted => {
-                                UiSettings.spindle_speed = self.text.to-float();
-                                root.update_preview();
-                            }
-                        }
-                    }
                 }
             }
 
@@ -463,21 +328,6 @@ export component MainWindow inherits Window {
                             root.zoom_preview(1);
                         }
                         accept
-                    }
-                }
-                Rectangle {
-                    x: preview.width - self.width;
-                    width: 132px;
-                    height: 116px;
-                    background: #20242ccc;
-                    VerticalLayout {
-                        padding: 6px;
-                        spacing: 4px;
-                        Text { text: "Слои"; color: #dddddd; }
-                        Rectangle { height: 19px; background: UiSettings.show-offset ? #6e2323 : #666666; Text { text: "Отступы"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-offset = !UiSettings.show-offset; root.update_preview(); } } }
-                        Rectangle { height: 19px; background: UiSettings.show-clamp ? #804423 : #666666; Text { text: "Зажимы"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-clamp = !UiSettings.show-clamp; root.update_preview(); } } }
-                        Rectangle { height: 19px; background: UiSettings.show-safe ? #806723 : #666666; Text { text: "Безопасность"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-safe = !UiSettings.show-safe; root.update_preview(); } } }
-                        Rectangle { height: 19px; background: UiSettings.show-tool ? #375b80 : #666666; Text { text: "Инструмент"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-tool = !UiSettings.show-tool; root.update_preview(); } } }
                     }
                 }
             }

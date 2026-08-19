@@ -304,7 +304,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
         }
 
-        let Some(window) = window_weak.upgrade() else {
+        let Some(_window) = window_weak.upgrade() else {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
         };
 
@@ -335,9 +335,15 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return slint::Image::from_rgb8(buffer);
         };
 
+        let settings = settings_rc.borrow().clone();
+        let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
+        let preview_left = expanded.as_ref().map_or(frame.left, |value| frame.left.min(value.left));
+        let preview_right = expanded.as_ref().map_or(frame.right, |value| frame.right.max(value.right));
+        let preview_bottom = expanded.as_ref().map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
+        let preview_top = expanded.as_ref().map_or(frame.top, |value| frame.top.max(value.top));
         let preview_data = preview::PreviewData::from_bounds(
             bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max,
-            frame.left, frame.right, frame.bottom, frame.top,
+            preview_left, preview_right, preview_bottom, preview_top,
         );
 
         let viewport = *viewport_rc.borrow();
@@ -346,19 +352,23 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         preview_renderer::draw_grid(&mut buffer, &preview_data, scale, pan);
         preview_renderer::axes(&mut buffer, &preview_data, scale, width as f32, height as f32, pan);
 
-        let settings = settings_rc.borrow().clone();
         // Draw board (blue) - thicker lines
 
         // Draw frame (red) - thicker lines
         let path = path_rc.borrow();
-        preview_renderer::dotted_polyline(&mut buffer, &path, &preview_data, scale, width as f32, height as f32, pan);
-        let board_width = bounds.width().max(f64::MIN_POSITIVE);
-        let board_height = bounds.height().max(f64::MIN_POSITIVE);
-        let shifted_path: Vec<_> = path.iter().map(|&(x, y)| (
-            frame.left + (x - bounds.x_min) * frame.width() / board_width,
-            frame.bottom + (y - bounds.y_min) * frame.height() / board_height,
-        )).collect();
-        preview_renderer::polyline(&mut buffer, &shifted_path, &preview_data, scale, width as f32, height as f32, (0, 210, 255), 2, pan);
+        preview_renderer::polyline(&mut buffer, &path, &preview_data, scale, width as f32, height as f32, (0, 210, 255), 2, pan);
+        if let Some(expanded) = expanded {
+            let corners = [
+                (expanded.left, expanded.bottom), (expanded.right, expanded.bottom),
+                (expanded.right, expanded.top), (expanded.left, expanded.top), (expanded.left, expanded.bottom),
+            ];
+            preview_renderer::dotted_rectangle(&mut buffer, &corners, &preview_data, scale, width as f32, height as f32, pan);
+        }
+        let anchored_corners = [
+            (frame.left, frame.bottom), (frame.right, frame.bottom),
+            (frame.right, frame.top), (frame.left, frame.top), (frame.left, frame.bottom),
+        ];
+        preview_renderer::rectangle(&mut buffer, &anchored_corners, &preview_data, scale, width as f32, height as f32, (255, 70, 100), pan);
         let rapid = rapid_rc.borrow();
         preview_renderer::polyline(&mut buffer, &rapid, &preview_data, scale, width as f32, height as f32, (255, 190, 0), 1, pan);
 

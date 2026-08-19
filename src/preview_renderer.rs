@@ -88,11 +88,6 @@ pub fn axes(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &PreviewD
     line(buffer, origin_x - 5.0, 10.0 * y_direction, origin_x, 0.0, (70, 210, 120), 2);
 }
 
-pub fn dimension_label(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &PreviewData, scale: f64, width: f32, height: f32, pan: (f64, f64), x: f64, y: f64, value: f64) {
-    let (screen_x, screen_y) = preview.world_to_screen(x, y, scale, width, height);
-    draw_number(buffer, screen_x as i32 + pan.0 as i32 + 4, screen_y as i32 + pan.1 as i32 + 4, value);
-}
-
 pub fn polyline(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8), thickness: i32, pan: (f64, f64)) {
     for pair in points.windows(2) {
         let (x1, y1) = preview.world_to_screen(pair[0].0, pair[0].1, scale, width, height);
@@ -101,12 +96,19 @@ pub fn polyline(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64
     }
 }
 
-pub fn dotted_polyline(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, pan: (f64, f64)) {
-    for (index, pair) in points.windows(2).enumerate() {
-        if index % 2 != 0 { continue; }
+pub fn dotted_rectangle(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, corners: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, pan: (f64, f64)) {
+    for pair in corners.windows(2) {
         let (x1, y1) = preview.world_to_screen(pair[0].0, pair[0].1, scale, width, height);
         let (x2, y2) = preview.world_to_screen(pair[1].0, pair[1].1, scale, width, height);
-        line(buffer, x1 + pan.0 as f32, y1 + pan.1 as f32, x2 + pan.0 as f32, y2 + pan.1 as f32, (255, 210, 0), 2);
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let length = (dx * dx + dy * dy).sqrt().max(1.0);
+        let segments = (length / 12.0).ceil() as i32;
+        for segment in (0..segments).step_by(2) {
+            let t1 = segment as f32 / segments as f32;
+            let t2 = ((segment + 1).min(segments)) as f32 / segments as f32;
+            line(buffer, x1 + dx * t1 + pan.0 as f32, y1 + dy * t1 + pan.1 as f32, x1 + dx * t2 + pan.0 as f32, y1 + dy * t2 + pan.1 as f32, (255, 210, 0), 2);
+        }
     }
 }
 

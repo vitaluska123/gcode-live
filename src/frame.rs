@@ -62,6 +62,19 @@ pub struct FrameGeometry {
 }
 
 impl FrameGeometry {
+    /// Symmetric reference frame: offsets are applied around all board sides.
+    pub fn expanded(bounds: &BoardBounds, settings: &Settings) -> Option<Self> {
+        if !bounds.is_valid() { return None; }
+        let offset_x = settings.offset_x.max(0.0);
+        let offset_y = settings.offset_y.max(0.0);
+        Some(Self {
+            left: bounds.x_min - offset_x,
+            right: bounds.x_max + offset_x,
+            bottom: bounds.y_min - offset_y,
+            top: bounds.y_max + offset_y,
+        })
+    }
+
     /// Calculate frame geometry based on board bounds and settings
     pub fn calculate(bounds: &BoardBounds, settings: &Settings) -> Option<Self> {
         if !bounds.is_valid() {
@@ -71,10 +84,12 @@ impl FrameGeometry {
         // The source board's right-bottom corner is the reference point.
         // Offset X grows the generated contour to the left, and offset Y grows
         // it upward, without moving the reference edges.
-        let left = bounds.x_min - settings.offset_x.max(0.0);
+        // Keep the right-bottom corner fixed while matching the dimensions of
+        // the symmetric reference frame (which grows by the offset on both sides).
+        let left = bounds.x_min - 2.0 * settings.offset_x.max(0.0);
         let right = bounds.x_max;
         let bottom = bounds.y_min;
-        let top = bounds.y_max + settings.offset_y.max(0.0);
+        let top = bounds.y_max + 2.0 * settings.offset_y.max(0.0);
 
         Some(Self {
             left,
@@ -291,10 +306,10 @@ mod tests {
         let settings = Settings { offset_x: 1.0, offset_y: 2.0, clamp_zone: 3.0, safe_zone: 4.0, tool_diameter: 2.0, ..Settings::default() };
         let frame = FrameGeometry::calculate(&bounds, &settings).expect("valid bounds");
 
-        assert_eq!(frame.left, -6.0);
+        assert_eq!(frame.left, -7.0);
         assert_eq!(frame.right, 15.0);
         assert_eq!(frame.bottom, 2.0);
-        assert_eq!(frame.top, 14.0);
+        assert_eq!(frame.top, 16.0);
     }
 
     #[test]

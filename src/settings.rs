@@ -72,10 +72,6 @@ impl Settings {
         Ok(())
     }
 
-    /// Calculate total margin for frame calculation
-    pub fn total_margin(&self) -> f64 {
-        self.clamp_zone + self.safe_zone + self.tool_diameter
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
