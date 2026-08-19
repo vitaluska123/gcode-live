@@ -18,6 +18,7 @@ pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &Pre
     let world_bottom = min_y + (base_y - height as f64) / scale;
     let world_top = min_y + base_y / scale;
     let step = nice_grid_step(80.0 / scale);
+    let mut labels = Vec::new();
     let pixels = buffer.make_mut_slice();
     let first_x = (world_left / step).floor() as i64;
     let last_x = (world_right / step).ceil() as i64;
@@ -25,6 +26,7 @@ pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &Pre
         let x = (base_x + (index as f64 * step - min_x) * scale).round() as i32;
         if x < 0 || x >= width as i32 { continue; }
         for y in 0..height { pixels[(y * width + x as u32) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
+        labels.push((x + 3, height as i32 - 11, index as f64 * step));
     }
     let first_y = (world_bottom / step).floor() as i64;
     let last_y = (world_top / step).ceil() as i64;
@@ -32,6 +34,31 @@ pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &Pre
         let y = (base_y - (index as f64 * step - min_y) * scale).round() as i32;
         if y < 0 || y >= height as i32 { continue; }
         for x in 0..width { pixels[(y as u32 * width + x) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
+        labels.push((3, y - 9, index as f64 * step));
+    }
+    for (x, y, value) in labels { draw_number(buffer, x, y, value); }
+}
+
+fn draw_number(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32, value: f64) {
+    let text = if value.abs() < 0.0001 { "0".to_owned() } else if value.abs() < 1.0 { format!("{value:.1}") } else { format!("{value:.0}") };
+    for (offset, ch) in text.chars().enumerate() { draw_glyph(buffer, x + offset as i32 * 4, y, ch); }
+}
+
+fn draw_glyph(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32, ch: char) {
+    let glyph = match ch {
+        '0' => [7,5,5,5,7], '1' => [2,6,2,2,7], '2' => [7,1,7,4,7], '3' => [7,1,7,1,7],
+        '4' => [5,5,7,1,1], '5' => [7,4,7,1,7], '6' => [7,4,7,5,7], '7' => [7,1,2,2,2],
+        '8' => [7,5,7,5,7], '9' => [7,5,7,1,7], '-' => [0,0,7,0,0], '.' => [0,0,0,0,2], _ => [0; 5],
+    };
+    let (width, height) = (buffer.width() as i32, buffer.height() as i32);
+    let pixels = buffer.make_mut_slice();
+    for (row, bits) in glyph.iter().enumerate() {
+        for col in 0..3 {
+            let (px, py) = (x + col, y + row as i32);
+            if bits & (1 << (2 - col)) != 0 && px >= 0 && py >= 0 && px < width && py < height {
+                pixels[(py * width + px) as usize] = slint::Rgb8Pixel::new(150, 160, 175);
+            }
+        }
     }
 }
 
