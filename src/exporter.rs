@@ -38,16 +38,19 @@ pub fn generate_frame_gcode(
         gcode.push_str("G0 Z5\nM5\nM30\n");
         return gcode;
     }
-    let num_passes = (cut_depth / step_depth).ceil() as usize;
+    // A tiny floating-point residue (for example 1.8 / 0.36) must not create
+    // an extra, identical final pass.
+    let num_passes = ((cut_depth / step_depth) - 1e-9).ceil() as usize;
 
     for pass in 1..=num_passes {
         let depth = (pass as f64 * step_depth).min(cut_depth);
 
         // Plunge to cut depth
-        gcode.push_str(&format!(
-            "G1 Z-{:.3} F{}\n",
-            depth, settings.feed_rate as i64
-        ));
+        if pass == 1 {
+            gcode.push_str(&format!("G1 Z-{depth:.3} F{}\n", settings.feed_rate as i64));
+        } else {
+            gcode.push_str(&format!("G1 Z-{depth:.3}\n"));
+        }
 
         // Follow every short segment so the corners remain rounded on controllers
         // that accept only G0/G1 moves.
@@ -57,9 +60,11 @@ pub fn generate_frame_gcode(
             if (from_y - frame.top).abs() < f64::EPSILON
                 && (to_y - frame.top).abs() < f64::EPSILON
             {
-                append_top_edge_with_tabs(&mut gcode, from_x, to_x, frame.top, depth, settings.feed_rate, &top_tabs);
+                append_top_edge_with_tabs(&mut gcode, from_x, to_x, frame.top, depth, &top_tabs);
             } else {
-                gcode.push_str(&format!("G1 X{to_x:.3} Y{to_y:.3}\n"));
+                // G1 stays modal after the plunge: ordinary moves need only
+                // coordinates, just like CAM-generated TAP programs.
+                gcode.push_str(&format!("X{to_x:.3} Y{to_y:.3}\n"));
             }
         }
 
@@ -83,7 +88,6 @@ fn append_top_edge_with_tabs(
     to_x: f64,
     y: f64,
     depth: f64,
-    feed_rate: f64,
     tabs: &[(f64, f64)],
 ) {
     let mut cursor_x = from_x;
@@ -94,16 +98,18 @@ fn append_top_edge_with_tabs(
     for &(left, right) in &ordered_tabs {
         let (entry, exit) = if reverse { (right, left) } else { (left, right) };
         if (entry - cursor_x).abs() > f64::EPSILON {
-            gcode.push_str(&format!("G1 X{entry:.3} Y{y:.3}\n"));
+            gcode.push_str(&format!("X{entry:.3} Y{y:.3}\n"));
         }
-        // Lift above the board before crossing an uncut holding tab.
+        // Match the source TAP pattern: lift above the board, cross the tab,
+        // return to the board surface, then resume the current cutting depth.
         gcode.push_str("G0 Z2\n");
-        gcode.push_str(&format!("G0 X{exit:.3} Y{y:.3}\n"));
-        gcode.push_str(&format!("G1 Z-{depth:.3} F{}\n", feed_rate as i64));
+        gcode.push_str(&format!("X{exit:.3} Y{y:.3}\n"));
+        gcode.push_str("Z0\n");
+        gcode.push_str(&format!("G1 Z-{depth:.3}\n"));
         cursor_x = exit;
     }
     if (to_x - cursor_x).abs() > f64::EPSILON {
-        gcode.push_str(&format!("G1 X{to_x:.3} Y{y:.3}\n"));
+        gcode.push_str(&format!("X{to_x:.3} Y{y:.3}\n"));
     }
 }
 
@@ -176,10 +182,12 @@ mod tests {
         );
 
         assert!(gcode.contains("G1 Z-0.400 F120"));
-        assert!(gcode.contains("G1 Z-0.800 F120"));
-        assert!(gcode.contains("G1 Z-1.000 F120"));
+        assert!(gcode.contains("G1 Z-0.800\n"));
+        assert!(gcode.contains("G1 Z-1.000\n"));
         assert!(gcode.contains("X19.966 Y0.741"));
         assert!(gcode.contains("G0 X-5.000 Y5.000\nM5"));
         assert_eq!(gcode.matches("G0 Z2\n").count(), 9);
+        assert_eq!(gcode.matches("Z0\n").count(), 9);
+        assert!(!gcode.contains("G1 X"));
     }
 }
