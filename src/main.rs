@@ -8,6 +8,7 @@ mod settings;
 mod frame;
 mod exporter;
 mod preview;
+mod preview_renderer;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let main_window = MainWindow::new()?;
@@ -293,7 +294,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         for pixel in buffer.make_mut_slice() {
             *pixel = slint::Rgb8Pixel::new(14, 17, 22);
         }
-        draw_grid(&mut buffer, 50, (42, 48, 58));
+        preview_renderer::draw_grid(&mut buffer);
 
         let board_borrow = board_rc.borrow();
         let Some(bounds) = board_borrow.as_ref() else {
@@ -313,16 +314,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let scale = preview_data.calculate_scale(width as f32, height as f32) * *zoom_rc.borrow();
 
         // Draw board (blue) - thicker lines
-        draw_rectangle(&mut buffer, &preview_data.board_corners(), &preview_data, scale,
+        preview_renderer::rectangle(&mut buffer, &preview_data.board_corners(), &preview_data, scale,
                        width as f32, height as f32, (0, 100, 200));
 
         // Draw frame (red) - thicker lines
-        draw_rectangle(&mut buffer, &preview_data.frame_corners(), &preview_data, scale,
+        preview_renderer::rectangle(&mut buffer, &preview_data.frame_corners(), &preview_data, scale,
                        width as f32, height as f32, (200, 0, 0));
         let path = path_rc.borrow();
-        draw_toolpath(&mut buffer, &path, &preview_data, scale, width as f32, height as f32);
+        preview_renderer::polyline(&mut buffer, &path, &preview_data, scale, width as f32, height as f32, (0, 210, 255), 2);
         let rapid = rapid_rc.borrow();
-        draw_toolpath_color(&mut buffer, &rapid, &preview_data, scale, width as f32, height as f32, (255, 190, 0), 1);
+        preview_renderer::polyline(&mut buffer, &rapid, &preview_data, scale, width as f32, height as f32, (255, 190, 0), 1);
 
         slint::Image::from_rgb8(buffer)
     });
