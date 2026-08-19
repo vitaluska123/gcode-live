@@ -68,15 +68,13 @@ impl FrameGeometry {
             return None;
         }
 
-        let horizontal_margin = settings.offset_x + settings.total_margin();
-        let vertical_margin = settings.offset_y + settings.total_margin();
-
-        // The machine workspace uses negative X and positive Y only. Expand the
-        // cutting bounds where possible, without producing unsafe coordinates.
-        let left = bounds.x_min - horizontal_margin;
-        let right = (bounds.x_max + horizontal_margin).min(0.0);
-        let bottom = (bounds.y_min - vertical_margin).max(0.0);
-        let top = bounds.y_max + vertical_margin;
+        // The source board's right-bottom corner is the reference point.
+        // Offset X grows the generated contour to the left, and offset Y grows
+        // it upward, without moving the reference edges.
+        let left = bounds.x_min - settings.offset_x.max(0.0);
+        let right = bounds.x_max;
+        let bottom = bounds.y_min;
+        let top = bounds.y_max + settings.offset_y.max(0.0);
 
         Some(Self {
             left,
@@ -293,10 +291,10 @@ mod tests {
         let settings = Settings { offset_x: 1.0, offset_y: 2.0, clamp_zone: 3.0, safe_zone: 4.0, tool_diameter: 2.0, ..Settings::default() };
         let frame = FrameGeometry::calculate(&bounds, &settings).expect("valid bounds");
 
-        assert_eq!(frame.left, -15.0);
-        assert_eq!(frame.right, 0.0);
-        assert_eq!(frame.bottom, 0.0);
-        assert_eq!(frame.top, 23.0);
+        assert_eq!(frame.left, -6.0);
+        assert_eq!(frame.right, 15.0);
+        assert_eq!(frame.bottom, 2.0);
+        assert_eq!(frame.top, 14.0);
     }
 
     #[test]
