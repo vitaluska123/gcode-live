@@ -68,24 +68,15 @@ impl FrameGeometry {
             return None;
         }
 
-        let margin = settings.total_margin();
+        let horizontal_margin = settings.offset_x + settings.total_margin();
+        let vertical_margin = settings.offset_y + settings.total_margin();
 
-        // Machine coordinate system:
-        // Origin at bottom-right
-        // X: negative to the left
-        // Y: positive upward
-
-        // Right boundary (closer to origin, less negative)
-        let right = -(settings.offset_x + margin);
-
-        // Bottom boundary
-        let bottom = settings.offset_y + margin;
-
-        // Left boundary (more negative)
-        let left = right - bounds.width();
-
-        // Top boundary
-        let top = bottom + bounds.height();
+        // Keep the frame in the same coordinate system as the imported G-code.
+        // The offsets and safety margin expand the frame around the complete board.
+        let left = bounds.x_min - horizontal_margin;
+        let right = bounds.x_max + horizontal_margin;
+        let bottom = bounds.y_min - vertical_margin;
+        let top = bounds.y_max + vertical_margin;
 
         Some(Self {
             left,
@@ -105,39 +96,39 @@ impl FrameGeometry {
         self.top - self.bottom
     }
 
-    /// Get all corner points in order (for drawing)
-    pub fn corners(&self) -> Vec<(f64, f64)> {
-        vec![
-            (self.left, self.bottom),
-            (self.right, self.bottom),
-            (self.right, self.top),
-            (self.left, self.top),
-            (self.left, self.bottom), // Close the loop
-        ]
-    }
 }
 
 /// Extract board bounds from G-code content
 pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
     let mut bounds = BoardBounds::new();
+    let mut current_x = None;
+    let mut current_y = None;
+    let mut linear_motion = false;
 
-    for line in content.lines() {
-        let line = line.trim().to_uppercase();
+    for raw_line in content.lines() {
+        let line = strip_comments(raw_line);
+        let mut has_coordinate = false;
 
-        // Skip comments and empty lines
-        if line.is_empty() || line.starts_with(';') || line.starts_with('(') {
-            continue;
+        for (letter, value) in gcode_words(&line) {
+
+            match letter {
+                'G' if value == 0.0 || value == 1.0 => linear_motion = true,
+                'G' => linear_motion = false,
+                'X' => {
+                    current_x = Some(value);
+                    has_coordinate = true;
+                }
+                'Y' => {
+                    current_y = Some(value);
+                    has_coordinate = true;
+                }
+                _ => {}
+            }
         }
 
-        // Parse G0/G1 commands with X/Y coordinates
-        if line.starts_with("G0") || line.starts_with("G1") {
-            let x = extract_coordinate(&line, 'X');
-            let y = extract_coordinate(&line, 'Y');
-
-            if let Some(x_val) = x {
-                if let Some(y_val) = y {
-                    bounds.update(x_val, y_val);
-                }
+        if linear_motion && has_coordinate {
+            if let (Some(x), Some(y)) = (current_x, current_y) {
+                bounds.update(x, y);
             }
         }
     }
@@ -145,23 +136,47 @@ pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
     bounds
 }
 
-/// Extract a coordinate value from a G-code line
-fn extract_coordinate(line: &str, axis: char) -> Option<f64> {
-    // Find the axis letter
-    let pos = line.find(axis)?;
+/// Parse contiguous or whitespace-separated G-code words, such as `G1X10Y-2`.
+fn gcode_words(line: &str) -> Vec<(char, f64)> {
+    let chars: Vec<char> = line.chars().collect();
+    let mut words = Vec::new();
+    let mut index = 0;
 
-    // Get the substring after the axis letter
-    let start = pos + 1;
+    while index < chars.len() {
+        if !chars[index].is_ascii_alphabetic() {
+            index += 1;
+            continue;
+        }
 
-    // Find the end of this number (next letter or end of string)
-    let rest = &line[start..];
-    let end = rest
-        .find(|c: char| c.is_ascii_alphabetic())
-        .unwrap_or(rest.len());
+        let letter = chars[index].to_ascii_uppercase();
+        index += 1;
+        let start = index;
+        while index < chars.len() && !chars[index].is_ascii_alphabetic() {
+            index += 1;
+        }
+        let value: String = chars[start..index].iter().collect();
+        if let Ok(value) = value.trim().parse::<f64>() {
+            words.push((letter, value));
+        }
+    }
 
-    let num_str = rest[..end].trim();
+    words
+}
 
-    num_str.parse::<f64>().ok()
+/// Remove semicolon and parenthesized comments while preserving command words.
+fn strip_comments(line: &str) -> String {
+    let mut cleaned = String::new();
+    let mut in_comment = false;
+    for ch in line.chars() {
+        match ch {
+            ';' if !in_comment => break,
+            '(' => in_comment = true,
+            ')' => in_comment = false,
+            _ if !in_comment => cleaned.push(ch),
+            _ => {}
+        }
+    }
+    cleaned
 }
 
 #[cfg(test)]
@@ -180,9 +195,33 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_coordinate() {
-        assert_eq!(extract_coordinate("G1 X10.5 Y20", 'X'), Some(10.5));
-        assert_eq!(extract_coordinate("G1 X10.5 Y20", 'Y'), Some(20.0));
-        assert_eq!(extract_coordinate("G0 X-5", 'X'), Some(-5.0));
+    fn parses_contiguous_gcode_words() {
+        let bounds = parse_gcode_bounds("G0X-5Y0\nG1X10.5Y20");
+        assert_eq!(bounds.x_min, -5.0);
+        assert_eq!(bounds.x_max, 10.5);
+        assert_eq!(bounds.y_max, 20.0);
+    }
+
+    #[test]
+    fn parses_modal_coordinates_and_inline_comments() {
+        let gcode = "g0 x0 y0 ; start\nG1 X10\nY5 (move only y)\nG1 X-2";
+        let bounds = parse_gcode_bounds(gcode);
+
+        assert_eq!(bounds.x_min, -2.0);
+        assert_eq!(bounds.x_max, 10.0);
+        assert_eq!(bounds.y_min, 0.0);
+        assert_eq!(bounds.y_max, 5.0);
+    }
+
+    #[test]
+    fn frame_expands_board_bounds_by_offsets_and_margin() {
+        let bounds = BoardBounds { x_min: -5.0, x_max: 15.0, y_min: 2.0, y_max: 12.0 };
+        let settings = Settings { offset_x: 1.0, offset_y: 2.0, clamp_zone: 3.0, safe_zone: 4.0, tool_diameter: 2.0, ..Settings::default() };
+        let frame = FrameGeometry::calculate(&bounds, &settings).expect("valid bounds");
+
+        assert_eq!(frame.left, -15.0);
+        assert_eq!(frame.right, 25.0);
+        assert_eq!(frame.bottom, -9.0);
+        assert_eq!(frame.top, 23.0);
     }
 }

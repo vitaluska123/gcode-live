@@ -13,8 +13,8 @@ export global UiSettings {
     in-out property<float> tool_diameter: 3.175;
     in-out property<float> cut_depth: 1.6;
     in-out property<float> step_depth: 0.4;
-    in-out property<int> feed_rate: 120;
-    in-out property<int> spindle_speed: 800;
+    in-out property<float> feed_rate: 120;
+    in-out property<float> spindle_speed: 800;
 }
 
 export component MainWindow inherits Window {
@@ -40,8 +40,14 @@ export component MainWindow inherits Window {
     callback save_settings();
     callback export_tap();
     callback show_error(string);
+    callback sync_settings();
     callback update_preview();
     callback render_preview(float, float) -> image;
+
+    update_preview => {
+        sync_settings();
+        preview_image = render_preview(preview.width / 1px, preview.height / 1px);
+    }
 
 
     // ========================================================
@@ -86,6 +92,7 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.offset_x = self.text.to-float();
+                                root.update_preview();
                             }
                         }
                     }
@@ -104,6 +111,7 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.offset_y = self.text.to-float();
+                                root.update_preview();
                             }
                         }
                     }
@@ -122,6 +130,7 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.clamp_zone = self.text.to-float();
+                                root.update_preview();
                             }
                         }
                     }
@@ -140,6 +149,7 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.safe_zone = self.text.to-float();
+                                root.update_preview();
                             }
                         }
                     }
@@ -158,6 +168,7 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.tool_diameter = self.text.to-float();
+                                root.update_preview();
                             }
                         }
                     }
@@ -176,6 +187,7 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.cut_depth = self.text.to-float();
+                                root.update_preview();
                             }
                         }
                     }
@@ -194,6 +206,7 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.step_depth = self.text.to-float();
+                                root.update_preview();
                             }
                         }
                     }
@@ -210,8 +223,8 @@ export component MainWindow inherits Window {
 
                             horizontal-stretch: 1;
 
-                            // Integer conversion is handled by Rust.
                             accepted => {
+                                UiSettings.feed_rate = self.text.to-float();
                                 root.update_preview();
                             }
                         }
@@ -229,8 +242,8 @@ export component MainWindow inherits Window {
 
                             horizontal-stretch: 1;
 
-                            // Integer conversion is handled by Rust.
                             accepted => {
+                                UiSettings.spindle_speed = self.text.to-float();
                                 root.update_preview();
                             }
                         }
@@ -439,6 +452,10 @@ export component MainWindow inherits Window {
 
 
             Rectangle {
+                preview := Rectangle {
+                    width: 100%;
+                    height: 100%;
+                }
                 horizontal-stretch: 1;
                 vertical-stretch: 1;
 

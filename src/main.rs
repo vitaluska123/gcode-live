@@ -30,13 +30,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui_settings.set_tool_diameter(settings.tool_diameter as f32);
     ui_settings.set_cut_depth(settings.cut_depth as f32);
     ui_settings.set_step_depth(settings.step_depth as f32);
-    ui_settings.set_feed_rate(settings.feed_rate as i32);
-    ui_settings.set_spindle_speed(settings.spindle_speed as i32);
+    ui_settings.set_feed_rate(settings.feed_rate as f32);
+    ui_settings.set_spindle_speed(settings.spindle_speed as f32);
 
     // State management
     let board_bounds = Rc::new(RefCell::new(None));
     let frame_geometry = Rc::new(RefCell::new(None));
     let current_settings = Rc::new(RefCell::new(settings));
+
+    // Keep the Rust state and calculated frame in step with edits made in the UI.
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
+    let window_weak = main_window.as_weak();
+    main_window.on_sync_settings(move || {
+        let Some(window) = window_weak.upgrade() else { return; };
+        let Some(settings_rc) = weak_settings.upgrade() else { return; };
+
+        let ui_settings = window.global::<UiSettings>();
+        let new_settings = settings::Settings {
+            offset_x: ui_settings.get_offset_x() as f64,
+            offset_y: ui_settings.get_offset_y() as f64,
+            clamp_zone: ui_settings.get_clamp_zone() as f64,
+            safe_zone: ui_settings.get_safe_zone() as f64,
+            tool_diameter: ui_settings.get_tool_diameter() as f64,
+            cut_depth: ui_settings.get_cut_depth() as f64,
+            step_depth: ui_settings.get_step_depth() as f64,
+            feed_rate: ui_settings.get_feed_rate() as f64,
+            spindle_speed: ui_settings.get_spindle_speed() as f64,
+        };
+
+        *settings_rc.borrow_mut() = new_settings.clone();
+
+        let Some(board_rc) = weak_board.upgrade() else { return; };
+        let Some(frame_rc) = weak_frame.upgrade() else { return; };
+        let bounds = board_rc.borrow();
+        if let Some(bounds) = bounds.as_ref() {
+            if let Some(frame) = frame::FrameGeometry::calculate(bounds, &new_settings) {
+                window.set_frame_width(format!("{:.3} mm", frame.width()).into());
+                window.set_frame_height(format!("{:.3} mm", frame.height()).into());
+                *frame_rc.borrow_mut() = Some(frame);
+            }
+        }
+    });
 
     // Open TAP file handler
     let weak_board = Rc::downgrade(&board_bounds);
@@ -72,8 +108,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return;
         }
 
-        let settings = settings_rc.borrow();
-        let frame = match frame::FrameGeometry::calculate(&bounds, &settings) {
+        let frame = match frame::FrameGeometry::calculate(&bounds, &settings_rc.borrow()) {
             Some(f) => f,
             None => {
                 window.invoke_show_error("Could not calculate frame geometry.".into());
@@ -231,17 +266,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let scale = preview_data.calculate_scale(width as f32, height as f32);
 
-        // Calculate common offset for centering
-        let all_x_min = bounds.x_min.min(frame.left);
-        let all_y_min = bounds.y_min.min(frame.bottom);
-        
         // Draw board (blue) - thicker lines
-        draw_rectangle_centered(&mut buffer, &preview_data.board_corners(), scale, 
-                                width as f32, height as f32, (0, 100, 200), all_x_min, all_y_min);
+        draw_rectangle(&mut buffer, &preview_data.board_corners(), &preview_data, scale,
+                       width as f32, height as f32, (0, 100, 200));
 
         // Draw frame (red) - thicker lines
-        draw_rectangle_centered(&mut buffer, &preview_data.frame_corners(), scale,
-                                width as f32, height as f32, (200, 0, 0), all_x_min, all_y_min);
+        draw_rectangle(&mut buffer, &preview_data.frame_corners(), &preview_data, scale,
+                       width as f32, height as f32, (200, 0, 0));
 
         slint::Image::from_rgb8(buffer)
     });
@@ -251,15 +282,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Draw a rectangle on the pixel buffer with centered positioning
-fn draw_rectangle_centered(
+fn draw_rectangle(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     corners: &[(f64, f64)],
+    preview_data: &preview::PreviewData,
     scale: f64,
     width: f32,
     height: f32,
     color: (u8, u8, u8),
-    offset_x: f64,
-    offset_y: f64,
 ) {
     if corners.len() < 2 {
         return;
@@ -269,28 +299,11 @@ fn draw_rectangle_centered(
         let (x1, y1) = corners[i];
         let (x2, y2) = corners[i + 1];
 
-        let (sx1, sy1) = transform_point_centered(x1, y1, scale, width, height, offset_x, offset_y);
-        let (sx2, sy2) = transform_point_centered(x2, y2, scale, width, height, offset_x, offset_y);
+        let (sx1, sy1) = preview_data.world_to_screen(x1, y1, scale, width, height);
+        let (sx2, sy2) = preview_data.world_to_screen(x2, y2, scale, width, height);
 
         draw_thick_line(buffer, sx1, sy1, sx2, sy2, color, 2);
     }
-}
-
-/// Transform a point to screen coordinates with common offset
-fn transform_point_centered(
-    x: f64,
-    y: f64,
-    scale: f64,
-    _width: f32,
-    height: f32,
-    offset_x: f64,
-    offset_y: f64,
-) -> (f32, f32) {
-    let padding = 20.0;
-    let sx = ((x - offset_x) * scale) as f32 + padding;
-    let sy = height - ((y - offset_y) * scale) as f32 - padding;
-
-    (sx, sy)
 }
 
 /// Draw a thick line using Bresenham's algorithm with line width

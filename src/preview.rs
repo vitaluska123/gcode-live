@@ -92,17 +92,26 @@ impl PreviewData {
         x: f64,
         y: f64,
         scale: f64,
-        _widget_width: f32,
+        widget_width: f32,
         widget_height: f32,
     ) -> (f32, f32) {
         // Find overall bounds for centering
         let all_x_min = self.board_x_min.min(self.frame_left);
+        let all_x_max = self.board_x_max.max(self.frame_right);
         let all_y_min = self.board_y_min.min(self.frame_bottom);
+        let all_y_max = self.board_y_max.max(self.frame_top);
 
-        // Scale and offset
-        let sx = ((x - all_x_min) * scale) as f32 + 10.0;
+        let content_width = all_x_max - all_x_min;
+        let content_height = all_y_max - all_y_min;
+        let content_screen_width = content_width * scale;
+        let content_screen_height = content_height * scale;
+
+        // Keep both axes centered, then flip Y for screen coordinates.
+        let sx = ((widget_width as f64 - content_screen_width) / 2.0
+            + (x - all_x_min) * scale) as f32;
         // Flip Y axis for screen coordinates (screen Y goes down)
-        let sy = widget_height - ((y - all_y_min) * scale) as f32 - 10.0;
+        let sy = ((widget_height as f64 + content_screen_height) / 2.0
+            - (y - all_y_min) * scale) as f32;
 
         (sx, sy)
     }
