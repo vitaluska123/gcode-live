@@ -20,13 +20,9 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let ui_settings = main_window.global::<UiSettings>();
     ui_settings.set_offset_x(settings.offset_x as f32);
     ui_settings.set_offset_y(settings.offset_y as f32);
-    ui_settings.set_clamp_zone(settings.clamp_zone as f32);
-    ui_settings.set_safe_zone(settings.safe_zone as f32);
-    ui_settings.set_tool_diameter(settings.tool_diameter as f32);
-    ui_settings.set_cut_depth(settings.cut_depth as f32);
-    ui_settings.set_step_depth(settings.step_depth as f32);
-    ui_settings.set_feed_rate(settings.feed_rate as f32);
-    ui_settings.set_spindle_speed(settings.spindle_speed as f32);
+    ui_settings.set_tab_width(settings.tab_width as f32);
+    ui_settings.set_minimum_tabs(settings.minimum_tabs as f32);
+    ui_settings.set_maximum_tab_gap(settings.maximum_tab_gap as f32);
 
     // State management
     let board_bounds = Rc::new(RefCell::new(None));
@@ -48,25 +44,23 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let Some(settings_rc) = weak_settings.upgrade() else { return; };
 
         let ui_settings = window.global::<UiSettings>();
+        let source_settings = settings_rc.borrow().clone();
         let new_settings = settings::Settings {
             offset_x: ui_settings.get_offset_x() as f64,
             offset_y: ui_settings.get_offset_y() as f64,
-            clamp_zone: ui_settings.get_clamp_zone() as f64,
-            safe_zone: ui_settings.get_safe_zone() as f64,
-            tool_diameter: ui_settings.get_tool_diameter() as f64,
-            cut_depth: ui_settings.get_cut_depth() as f64,
-            step_depth: ui_settings.get_step_depth() as f64,
-            feed_rate: ui_settings.get_feed_rate() as f64,
-            spindle_speed: ui_settings.get_spindle_speed() as f64,
+            tab_width: ui_settings.get_tab_width() as f64,
+            minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
+            maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
+            ..source_settings
         };
 
         *settings_rc.borrow_mut() = new_settings.clone();
 
         let Some(board_rc) = weak_board.upgrade() else { return; };
         let Some(frame_rc) = weak_frame.upgrade() else { return; };
-        let bounds = board_rc.borrow();
-        if let Some(bounds) = bounds.as_ref() {
-            if let Some(frame) = frame::FrameGeometry::calculate(bounds, &new_settings) {
+        let bounds = board_rc.borrow().clone();
+        if let Some(bounds) = bounds {
+            if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
                 window.set_frame_width(format!("{:.3} mm", frame.width()).into());
                 window.set_frame_height(format!("{:.3} mm", frame.height()).into());
                 *frame_rc.borrow_mut() = Some(frame);
@@ -111,6 +105,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let home = frame::parse_gcode_home_position(&content);
         let path = frame::parse_gcode_toolpath(&content);
         let rapid = frame::parse_gcode_rapid_path(&content);
+
+        frame::apply_source_cutting_parameters(&content, &mut settings_rc.borrow_mut());
 
         if !bounds.is_valid() {
             window.invoke_show_error("No valid G-code coordinates found in file.".into());
@@ -213,16 +209,14 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
 
         let ui_settings = window.global::<UiSettings>();
         
+        let source_settings = settings_rc.borrow().clone();
         let new_settings = settings::Settings {
             offset_x: ui_settings.get_offset_x() as f64,
             offset_y: ui_settings.get_offset_y() as f64,
-            clamp_zone: ui_settings.get_clamp_zone() as f64,
-            safe_zone: ui_settings.get_safe_zone() as f64,
-            tool_diameter: ui_settings.get_tool_diameter() as f64,
-            cut_depth: ui_settings.get_cut_depth() as f64,
-            step_depth: ui_settings.get_step_depth() as f64,
-            feed_rate: ui_settings.get_feed_rate() as f64,
-            spindle_speed: ui_settings.get_spindle_speed() as f64,
+            tab_width: ui_settings.get_tab_width() as f64,
+            minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
+            maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
+            ..source_settings
         };
 
         if let Err(e) = new_settings.save() {
@@ -230,15 +224,16 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return;
         }
 
-        *settings_rc.borrow_mut() = new_settings;
+        *settings_rc.borrow_mut() = new_settings.clone();
 
         // Recalculate frame if we have board data
-        if let Some(bounds) = board_bounds_clone.borrow().as_ref() {
-            if let Some(frame) = frame::FrameGeometry::calculate(bounds, &*settings_rc.borrow()) {
+        let bounds = board_bounds_clone.borrow().clone();
+        if let Some(bounds) = bounds {
+            if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
                 *frame_geometry_clone.borrow_mut() = Some(frame);
-                window.invoke_update_preview();
             }
         }
+        window.invoke_update_preview();
     });
 
     // Export TAP handler
@@ -369,6 +364,24 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             (frame.right, frame.top), (frame.left, frame.top), (frame.left, frame.bottom),
         ];
         preview_renderer::rectangle(&mut buffer, &anchored_corners, &preview_data, scale, width as f32, height as f32, (255, 70, 100), pan);
+        let corner_radius = (settings.tool_diameter / 2.0)
+            .min(1.0)
+            .min(frame.width() / 4.0)
+            .min(frame.height() / 4.0)
+            .max(0.0);
+        for (left, right) in frame::top_tab_intervals(frame, corner_radius, &settings) {
+            preview_renderer::polyline(
+                &mut buffer,
+                &[(left, frame.top), (right, frame.top)],
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                (255, 220, 70),
+                4,
+                pan,
+            );
+        }
         let rapid = rapid_rc.borrow();
         preview_renderer::polyline(&mut buffer, &rapid, &preview_data, scale, width as f32, height as f32, (255, 190, 0), 1, pan);
 

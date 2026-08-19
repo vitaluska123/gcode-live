@@ -1,11 +1,7 @@
 {
-  "offset_x": 10.0,
-  "offset_y": 10.0,
-  "clamp_zone": 5.0,
-  "safe_zone": 3.0,
-  "tool_diameter": 3.174999952316284,
-  "cut_depth": 1.600000023841858,
-  "step_depth": 0.4000000059604645,
-  "feed_rate": 120.0,
-  "spindle_speed": 800.0
+  "offset_x": 4.77,
+  "offset_y": 4.79,
+  "tab_width": 3.0,
+  "minimum_tabs": 4,
+  "maximum_tab_gap": 20.0
 }

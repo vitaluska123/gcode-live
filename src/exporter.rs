@@ -1,4 +1,4 @@
-use crate::frame::{BoardBounds, FrameGeometry};
+use crate::frame::{top_tab_intervals, BoardBounds, FrameGeometry};
 use crate::settings::Settings;
 
 /// Generate G-code for the frame cutting operation
@@ -21,6 +21,7 @@ pub fn generate_frame_gcode(
         .min(frame.height() / 4.0)
         .max(0.0);
     let path = rounded_rectangle_path(frame, corner_radius, 6);
+    let top_tabs = top_tab_intervals(frame, corner_radius, settings);
     let Some(&(start_x, start_y)) = path.first() else {
         return gcode;
     };
@@ -50,8 +51,16 @@ pub fn generate_frame_gcode(
 
         // Follow every short segment so the corners remain rounded on controllers
         // that accept only G0/G1 moves.
-        for &(x, y) in path.iter().skip(1) {
-            gcode.push_str(&format!("G1 X{x:.3} Y{y:.3}\n"));
+        for segment in path.windows(2) {
+            let (from_x, from_y) = segment[0];
+            let (to_x, to_y) = segment[1];
+            if (from_y - frame.top).abs() < f64::EPSILON
+                && (to_y - frame.top).abs() < f64::EPSILON
+            {
+                append_top_edge_with_tabs(&mut gcode, from_x, to_x, frame.top, depth, settings.feed_rate, &top_tabs);
+            } else {
+                gcode.push_str(&format!("G1 X{to_x:.3} Y{to_y:.3}\n"));
+            }
         }
 
         gcode.push_str("\n");
@@ -66,6 +75,36 @@ pub fn generate_frame_gcode(
     gcode.push_str("M30\n");
 
     gcode
+}
+
+fn append_top_edge_with_tabs(
+    gcode: &mut String,
+    from_x: f64,
+    to_x: f64,
+    y: f64,
+    depth: f64,
+    feed_rate: f64,
+    tabs: &[(f64, f64)],
+) {
+    let mut cursor_x = from_x;
+    let reverse = to_x < from_x;
+    let mut ordered_tabs = tabs.to_vec();
+    if reverse { ordered_tabs.reverse(); }
+
+    for &(left, right) in &ordered_tabs {
+        let (entry, exit) = if reverse { (right, left) } else { (left, right) };
+        if (entry - cursor_x).abs() > f64::EPSILON {
+            gcode.push_str(&format!("G1 X{entry:.3} Y{y:.3}\n"));
+        }
+        // Lift above the board before crossing an uncut holding tab.
+        gcode.push_str("G0 Z2\n");
+        gcode.push_str(&format!("G0 X{exit:.3} Y{y:.3}\n"));
+        gcode.push_str(&format!("G1 Z-{depth:.3} F{}\n", feed_rate as i64));
+        cursor_x = exit;
+    }
+    if (to_x - cursor_x).abs() > f64::EPSILON {
+        gcode.push_str(&format!("G1 X{to_x:.3} Y{y:.3}\n"));
+    }
 }
 
 fn rounded_rectangle_path(
@@ -128,7 +167,7 @@ mod tests {
     #[test]
     fn export_contains_all_depth_passes_and_rounded_corner_points() {
         let frame = FrameGeometry { left: 0.0, right: 20.0, bottom: 0.0, top: 10.0 };
-        let settings = Settings { cut_depth: 1.0, step_depth: 0.4, tool_diameter: 2.0, ..Settings::default() };
+        let settings = Settings { cut_depth: 1.0, step_depth: 0.4, tool_diameter: 2.0, tab_width: 3.0, minimum_tabs: 3, maximum_tab_gap: 20.0, ..Settings::default() };
         let gcode = generate_frame_gcode(
             &BoardBounds::default(),
             &frame,
@@ -141,5 +180,6 @@ mod tests {
         assert!(gcode.contains("G1 Z-1.000 F120"));
         assert!(gcode.contains("X19.966 Y0.741"));
         assert!(gcode.contains("G0 X-5.000 Y5.000\nM5"));
+        assert_eq!(gcode.matches("G0 Z2\n").count(), 9);
     }
 }

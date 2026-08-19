@@ -8,13 +8,9 @@ import { Button, LineEdit, GroupBox } from "std-widgets.slint";
 export global UiSettings {
     in-out property<float> offset_x: 10.0;
     in-out property<float> offset_y: 10.0;
-    in-out property<float> clamp_zone: 5.0;
-    in-out property<float> safe_zone: 3.0;
-    in-out property<float> tool_diameter: 3.175;
-    in-out property<float> cut_depth: 1.6;
-    in-out property<float> step_depth: 0.4;
-    in-out property<float> feed_rate: 120;
-    in-out property<float> spindle_speed: 800;
+    in-out property<float> tab_width: 3.0;
+    in-out property<float> minimum_tabs: 3.0;
+    in-out property<float> maximum_tab_gap: 20.0;
 }
 
 export component MainWindow inherits Window {
@@ -112,7 +108,6 @@ export component MainWindow inherits Window {
                         }
                     }
 
-
                     HorizontalLayout {
                         Text {
                             text: "Отступ Y (мм):";
@@ -126,6 +121,44 @@ export component MainWindow inherits Window {
 
                             accepted => {
                                 UiSettings.offset_y = self.text.to-float();
+                                root.update_preview();
+                            }
+                        }
+                    }
+
+                    Text { text: "Перемычки"; font-weight: 600; }
+
+                    HorizontalLayout {
+                        Text { text: "Ширина (мм):"; vertical-alignment: center; }
+                        LineEdit {
+                            text: UiSettings.tab_width + "";
+                            preferred-width: 90px;
+                            accepted => {
+                                UiSettings.tab_width = self.text.to-float();
+                                root.update_preview();
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        Text { text: "Минимум:"; vertical-alignment: center; }
+                        LineEdit {
+                            text: UiSettings.minimum_tabs + "";
+                            preferred-width: 90px;
+                            accepted => {
+                                UiSettings.minimum_tabs = self.text.to-float();
+                                root.update_preview();
+                            }
+                        }
+                    }
+
+                    HorizontalLayout {
+                        Text { text: "Макс. промежуток (мм):"; vertical-alignment: center; }
+                        LineEdit {
+                            text: UiSettings.maximum_tab_gap + "";
+                            preferred-width: 90px;
+                            accepted => {
+                                UiSettings.maximum_tab_gap = self.text.to-float();
                                 root.update_preview();
                             }
                         }

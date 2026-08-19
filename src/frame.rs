@@ -111,6 +111,76 @@ impl FrameGeometry {
 
 }
 
+/// Uncut intervals along the straight part of the generated frame's upper edge.
+/// Each pair is ordered from left to right and represents one holding tab.
+pub fn top_tab_intervals(
+    frame: &FrameGeometry,
+    corner_radius: f64,
+    settings: &Settings,
+) -> Vec<(f64, f64)> {
+    let left = frame.left + corner_radius.max(0.0);
+    let right = frame.right - corner_radius.max(0.0);
+    let usable_width = right - left;
+    let tab_width = settings.tab_width.max(0.0).min(usable_width);
+    if usable_width <= 0.0 || tab_width <= 0.0 {
+        return Vec::new();
+    }
+
+    let mut count = settings.minimum_tabs.max(3);
+    let maximum_gap = settings.maximum_tab_gap.max(0.0);
+    while (usable_width - count as f64 * tab_width) / (count as f64 + 1.0) > maximum_gap {
+        count += 1;
+    }
+
+    // More tabs than can physically fit would produce overlapping intervals.
+    count = count.min((usable_width / tab_width).floor().max(1.0) as usize);
+    let gap = ((usable_width - count as f64 * tab_width) / (count as f64 + 1.0)).max(0.0);
+    (0..count)
+        .map(|index| {
+            let start = left + gap * (index as f64 + 1.0) + tab_width * index as f64;
+            (start, start + tab_width)
+        })
+        .collect()
+}
+
+/// Read cutting values that are available in a standard TAP program.
+/// Offsets and holding-tab settings remain application settings; all cutting
+/// values are refreshed from the currently opened source program.
+pub fn apply_source_cutting_parameters(content: &str, settings: &mut Settings) {
+    let mut cutting_motion = false;
+    let mut depths: Vec<f64> = Vec::new();
+
+    for raw_line in content.lines() {
+        let words = gcode_words(&strip_comments(raw_line));
+        let line_is_g1 = words.iter().any(|&(letter, value)| letter == 'G' && value == 1.0);
+        for &(letter, value) in &words {
+            match letter {
+                'G' if value == 1.0 => cutting_motion = true,
+                'G' => cutting_motion = false,
+                'S' if value > 0.0 => settings.spindle_speed = value,
+                'F' if cutting_motion || line_is_g1 => settings.feed_rate = value,
+                'Z' if cutting_motion && value < 0.0 => depths.push(value.abs()),
+                _ => {}
+            }
+        }
+    }
+
+    depths.sort_by(|left, right| left.total_cmp(right));
+    depths.dedup_by(|left, right| (*left - *right).abs() < 0.000_001);
+    if let Some(&deepest) = depths.last() {
+        settings.cut_depth = deepest;
+    }
+    if depths.len() >= 2 {
+        let step = depths.windows(2)
+            .map(|pair| pair[1] - pair[0])
+            .filter(|value| *value > 0.000_001)
+            .min_by(|left, right| left.total_cmp(right));
+        if let Some(step) = step { settings.step_depth = step; }
+    } else if let Some(&depth) = depths.first() {
+        settings.step_depth = depth;
+    }
+}
+
 /// Extract board bounds from G-code content
 pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
     let mut bounds = BoardBounds::new();
@@ -303,7 +373,7 @@ mod tests {
     #[test]
     fn frame_expands_board_bounds_by_offsets_and_margin() {
         let bounds = BoardBounds { x_min: -5.0, x_max: 15.0, y_min: 2.0, y_max: 12.0 };
-        let settings = Settings { offset_x: 1.0, offset_y: 2.0, clamp_zone: 3.0, safe_zone: 4.0, tool_diameter: 2.0, ..Settings::default() };
+        let settings = Settings { offset_x: 1.0, offset_y: 2.0, tool_diameter: 2.0, ..Settings::default() };
         let frame = FrameGeometry::calculate(&bounds, &settings).expect("valid bounds");
 
         assert_eq!(frame.left, -7.0);
@@ -318,5 +388,25 @@ mod tests {
             parse_gcode_home_position("G0 X-10 Y2\nG0 Z5\nX-5Y5\nM5\nM30"),
             Some((-5.0, 5.0))
         );
+    }
+
+    #[test]
+    fn top_tabs_keep_gaps_within_configured_limit() {
+        let frame = FrameGeometry { left: 0.0, right: 100.0, bottom: 0.0, top: 40.0 };
+        let settings = Settings { tab_width: 3.0, minimum_tabs: 3, maximum_tab_gap: 20.0, ..Settings::default() };
+        let tabs = top_tab_intervals(&frame, 1.0, &settings);
+        assert_eq!(tabs.len(), 4);
+        assert!((tabs[0].0 - 1.0) < 20.0);
+        assert!((99.0 - tabs.last().expect("tab").1) < 20.0);
+    }
+
+    #[test]
+    fn reads_cutting_values_from_source_program() {
+        let mut settings = Settings::default();
+        apply_source_cutting_parameters("M3 S12000\nG1 Z-0.4 F150\nZ-0.8\nZ-1.2", &mut settings);
+        assert_eq!(settings.spindle_speed, 12000.0);
+        assert_eq!(settings.feed_rate, 150.0);
+        assert_eq!(settings.cut_depth, 1.2);
+        assert!((settings.step_depth - 0.4).abs() < 0.000_001);
     }
 }
