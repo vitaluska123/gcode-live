@@ -36,6 +36,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // State management
     let board_bounds = Rc::new(RefCell::new(None));
     let frame_geometry = Rc::new(RefCell::new(None));
+    let source_home = Rc::new(RefCell::new(None));
+    let toolpath = Rc::new(RefCell::new(Vec::new()));
+    let rapid_path = Rc::new(RefCell::new(Vec::new()));
+    let preview_zoom = Rc::new(RefCell::new(1.0_f64));
     let current_settings = Rc::new(RefCell::new(settings));
 
     // Keep the Rust state and calculated frame in step with edits made in the UI.
@@ -78,6 +82,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
     let weak_settings = Rc::downgrade(&current_settings);
+    let weak_home = Rc::downgrade(&source_home);
+    let weak_toolpath = Rc::downgrade(&toolpath);
+    let weak_rapid_path = Rc::downgrade(&rapid_path);
     let window_weak = main_window.as_weak();
 
     main_window.on_open_tap_file(move || {
@@ -85,6 +92,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Some(board_rc) = weak_board.upgrade() else { return; };
         let Some(frame_rc) = weak_frame.upgrade() else { return; };
         let Some(settings_rc) = weak_settings.upgrade() else { return; };
+        let Some(home_rc) = weak_home.upgrade() else { return; };
+        let Some(path_rc) = weak_toolpath.upgrade() else { return; };
+        let Some(rapid_rc) = weak_rapid_path.upgrade() else { return; };
 
         let Some(file_path) = rfd::FileDialog::new()
             .add_filter("TAP Files", &["tap", "nc", "gcode", "ngc"])
@@ -102,6 +112,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let bounds = frame::parse_gcode_bounds(&content);
+        let home = frame::parse_gcode_home_position(&content);
+        let path = frame::parse_gcode_toolpath(&content);
+        let rapid = frame::parse_gcode_rapid_path(&content);
 
         if !bounds.is_valid() {
             window.invoke_show_error("No valid G-code coordinates found in file.".into());
@@ -134,9 +147,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         *board_rc.borrow_mut() = Some(bounds);
         *frame_rc.borrow_mut() = Some(frame);
+        *home_rc.borrow_mut() = home;
+        *path_rc.borrow_mut() = path;
+        *rapid_rc.borrow_mut() = rapid;
 
         // Trigger preview update
         window.invoke_update_preview();
+    });
+
+    let zoom_state = preview_zoom.clone();
+    let window_weak = main_window.as_weak();
+    main_window.on_zoom_preview(move |direction| {
+        {
+            let mut zoom = zoom_state.borrow_mut();
+            *zoom = (*zoom * if direction > 0 { 1.25 } else { 0.8 }).clamp(0.1, 20.0);
+        }
+        if let Some(window) = window_weak.upgrade() { window.invoke_update_preview(); }
+    });
+    let zoom_state = preview_zoom.clone();
+    let window_weak = main_window.as_weak();
+    main_window.on_fit_preview(move || {
+        *zoom_state.borrow_mut() = 1.0;
+        if let Some(window) = window_weak.upgrade() { window.invoke_update_preview(); }
     });
 
     // Save settings handler
@@ -182,7 +214,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Export TAP handler
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_toolpath = Rc::downgrade(&toolpath);
+    let weak_rapid_path = Rc::downgrade(&rapid_path);
+    let weak_zoom = Rc::downgrade(&preview_zoom);
     let weak_settings = Rc::downgrade(&current_settings);
+    let weak_home = Rc::downgrade(&source_home);
     let window_weak = main_window.as_weak();
 
     main_window.on_export_tap(move || {
@@ -190,6 +226,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Some(board_rc) = weak_board.upgrade() else { return; };
         let Some(frame_rc) = weak_frame.upgrade() else { return; };
         let Some(settings_rc) = weak_settings.upgrade() else { return; };
+        let Some(home_rc) = weak_home.upgrade() else { return; };
 
         let board_borrow = board_rc.borrow();
         let Some(bounds) = board_borrow.as_ref() else {
@@ -210,7 +247,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return;
         };
 
-        let gcode = exporter::generate_frame_gcode(bounds, frame, &*settings_rc.borrow());
+        let gcode = exporter::generate_frame_gcode(
+            bounds,
+            frame,
+            &settings_rc.borrow(),
+            *home_rc.borrow(),
+        );
 
         if let Err(e) = exporter::save_gcode(&gcode, &file_path) {
             window.invoke_show_error(format!("Failed to export G-code: {}", e).into());
@@ -241,13 +283,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Some(frame_rc) = weak_frame.upgrade() else {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
         };
+        let Some(path_rc) = weak_toolpath.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
+        let Some(rapid_rc) = weak_rapid_path.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
+        let Some(zoom_rc) = weak_zoom.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
 
         let mut buffer = SharedPixelBuffer::<slint::Rgb8Pixel>::new(width, height);
 
-        // Fill with white background
+        // Dark editor-like background and a neutral grid.
         for pixel in buffer.make_mut_slice() {
-            *pixel = slint::Rgb8Pixel::new(255, 255, 255);
+            *pixel = slint::Rgb8Pixel::new(14, 17, 22);
         }
+        draw_grid(&mut buffer, 50, (42, 48, 58));
 
         let board_borrow = board_rc.borrow();
         let Some(bounds) = board_borrow.as_ref() else {
@@ -264,7 +310,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             frame.left, frame.right, frame.bottom, frame.top,
         );
 
-        let scale = preview_data.calculate_scale(width as f32, height as f32);
+        let scale = preview_data.calculate_scale(width as f32, height as f32) * *zoom_rc.borrow();
 
         // Draw board (blue) - thicker lines
         draw_rectangle(&mut buffer, &preview_data.board_corners(), &preview_data, scale,
@@ -273,12 +319,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Draw frame (red) - thicker lines
         draw_rectangle(&mut buffer, &preview_data.frame_corners(), &preview_data, scale,
                        width as f32, height as f32, (200, 0, 0));
+        let path = path_rc.borrow();
+        draw_toolpath(&mut buffer, &path, &preview_data, scale, width as f32, height as f32);
+        let rapid = rapid_rc.borrow();
+        draw_toolpath_color(&mut buffer, &rapid, &preview_data, scale, width as f32, height as f32, (255, 190, 0), 1);
 
         slint::Image::from_rgb8(buffer)
     });
 
     main_window.run()?;
     Ok(())
+}
+
+fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, spacing: u32, color: (u8, u8, u8)) {
+    let width = buffer.width();
+    let height = buffer.height();
+    let pixels = buffer.make_mut_slice();
+    for x in (0..width).step_by(spacing as usize) {
+        for y in 0..height { pixels[(y * width + x) as usize] = slint::Rgb8Pixel::new(color.0, color.1, color.2); }
+    }
+    for y in (0..height).step_by(spacing as usize) {
+        for x in 0..width { pixels[(y * width + x) as usize] = slint::Rgb8Pixel::new(color.0, color.1, color.2); }
+    }
+}
+
+fn draw_toolpath(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &preview::PreviewData, scale: f64, width: f32, height: f32) {
+    draw_toolpath_color(buffer, points, preview, scale, width, height, (0, 210, 255), 2);
+}
+
+fn draw_toolpath_color(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &preview::PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8), thickness: i32) {
+    for pair in points.windows(2) {
+        let (x1, y1) = preview.world_to_screen(pair[0].0, pair[0].1, scale, width, height);
+        let (x2, y2) = preview.world_to_screen(pair[1].0, pair[1].1, scale, width, height);
+        draw_thick_line(buffer, x1, y1, x2, y2, color, thickness);
+    }
 }
 
 /// Draw a rectangle on the pixel buffer with centered positioning

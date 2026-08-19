@@ -71,11 +71,11 @@ impl FrameGeometry {
         let horizontal_margin = settings.offset_x + settings.total_margin();
         let vertical_margin = settings.offset_y + settings.total_margin();
 
-        // Keep the frame in the same coordinate system as the imported G-code.
-        // The offsets and safety margin expand the frame around the complete board.
+        // The machine workspace uses negative X and positive Y only. Expand the
+        // cutting bounds where possible, without producing unsafe coordinates.
         let left = bounds.x_min - horizontal_margin;
-        let right = bounds.x_max + horizontal_margin;
-        let bottom = bounds.y_min - vertical_margin;
+        let right = (bounds.x_max + horizontal_margin).min(0.0);
+        let bottom = (bounds.y_min - vertical_margin).max(0.0);
         let top = bounds.y_max + vertical_margin;
 
         Some(Self {
@@ -103,7 +103,7 @@ pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
     let mut bounds = BoardBounds::new();
     let mut current_x = None;
     let mut current_y = None;
-    let mut linear_motion = false;
+    let mut cutting_motion = false;
 
     for raw_line in content.lines() {
         let line = strip_comments(raw_line);
@@ -112,8 +112,8 @@ pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
         for (letter, value) in gcode_words(&line) {
 
             match letter {
-                'G' if value == 0.0 || value == 1.0 => linear_motion = true,
-                'G' => linear_motion = false,
+                'G' if value == 1.0 => cutting_motion = true,
+                'G' => cutting_motion = false,
                 'X' => {
                     current_x = Some(value);
                     has_coordinate = true;
@@ -126,7 +126,7 @@ pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
             }
         }
 
-        if linear_motion && has_coordinate {
+        if cutting_motion && has_coordinate {
             if let (Some(x), Some(y)) = (current_x, current_y) {
                 bounds.update(x, y);
             }
@@ -134,6 +134,80 @@ pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
     }
 
     bounds
+}
+
+/// Find the final XY position before the source program stops the spindle or ends.
+/// This is the source file's parking/home position and is preserved on export.
+pub fn parse_gcode_home_position(content: &str) -> Option<(f64, f64)> {
+    let mut current_x = None;
+    let mut current_y = None;
+
+    for raw_line in content.lines() {
+        let words = gcode_words(&strip_comments(raw_line));
+        if words.iter().any(|&(letter, value)| {
+            letter == 'M' && (value == 5.0 || value == 30.0)
+        }) {
+            break;
+        }
+
+        for (letter, value) in words {
+            match letter {
+                'X' => current_x = Some(value),
+                'Y' => current_y = Some(value),
+                _ => {}
+            }
+        }
+    }
+
+    Some((current_x?, current_y?))
+}
+
+/// Extract every cutting position from G1/modal G1 moves for the preview.
+pub fn parse_gcode_toolpath(content: &str) -> Vec<(f64, f64)> {
+    let mut points = Vec::new();
+    let mut x = None;
+    let mut y = None;
+    let mut cutting = false;
+    for raw_line in content.lines() {
+        let mut changed = false;
+        for (letter, value) in gcode_words(&strip_comments(raw_line)) {
+            match letter {
+                'G' if value == 1.0 => cutting = true,
+                'G' => cutting = false,
+                'X' => { x = Some(value); changed = true; }
+                'Y' => { y = Some(value); changed = true; }
+                _ => {}
+            }
+        }
+        if cutting && changed {
+            if let (Some(x), Some(y)) = (x, y) { points.push((x, y)); }
+        }
+    }
+    points
+}
+
+/// Extract rapid G0 positioning moves, including the source parking move.
+pub fn parse_gcode_rapid_path(content: &str) -> Vec<(f64, f64)> {
+    let mut points = Vec::new();
+    let mut x = None;
+    let mut y = None;
+    let mut rapid = false;
+    for raw_line in content.lines() {
+        let mut changed = false;
+        for (letter, value) in gcode_words(&strip_comments(raw_line)) {
+            match letter {
+                'G' if value == 0.0 => rapid = true,
+                'G' => rapid = false,
+                'X' => { x = Some(value); changed = true; }
+                'Y' => { y = Some(value); changed = true; }
+                _ => {}
+            }
+        }
+        if rapid && changed {
+            if let (Some(x), Some(y)) = (x, y) { points.push((x, y)); }
+        }
+    }
+    points
 }
 
 /// Parse contiguous or whitespace-separated G-code words, such as `G1X10Y-2`.
@@ -188,16 +262,16 @@ mod tests {
         let gcode = "G0 X0 Y0\nG1 X10 Y5\nG1 X20 Y10";
         let bounds = parse_gcode_bounds(gcode);
 
-        assert!((bounds.x_min - 0.0).abs() < 0.001);
+        assert!((bounds.x_min - 10.0).abs() < 0.001);
         assert!((bounds.x_max - 20.0).abs() < 0.001);
-        assert!((bounds.y_min - 0.0).abs() < 0.001);
+        assert!((bounds.y_min - 5.0).abs() < 0.001);
         assert!((bounds.y_max - 10.0).abs() < 0.001);
     }
 
     #[test]
     fn parses_contiguous_gcode_words() {
         let bounds = parse_gcode_bounds("G0X-5Y0\nG1X10.5Y20");
-        assert_eq!(bounds.x_min, -5.0);
+        assert_eq!(bounds.x_min, 10.5);
         assert_eq!(bounds.x_max, 10.5);
         assert_eq!(bounds.y_max, 20.0);
     }
@@ -220,8 +294,16 @@ mod tests {
         let frame = FrameGeometry::calculate(&bounds, &settings).expect("valid bounds");
 
         assert_eq!(frame.left, -15.0);
-        assert_eq!(frame.right, 25.0);
-        assert_eq!(frame.bottom, -9.0);
+        assert_eq!(frame.right, 0.0);
+        assert_eq!(frame.bottom, 0.0);
         assert_eq!(frame.top, 23.0);
+    }
+
+    #[test]
+    fn finds_the_source_parking_position() {
+        assert_eq!(
+            parse_gcode_home_position("G0 X-10 Y2\nG0 Z5\nX-5Y5\nM5\nM30"),
+            Some((-5.0, 5.0))
+        );
     }
 }

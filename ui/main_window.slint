@@ -18,8 +18,6 @@ export global UiSettings {
 }
 
 export component MainWindow inherits Window {
-    width: 1200px;
-    height: 800px;
     title: "PCB Frame Generator";
 
     in-out property<string> board_width: "";
@@ -43,6 +41,10 @@ export component MainWindow inherits Window {
     callback sync_settings();
     callback update_preview();
     callback render_preview(float, float) -> image;
+    callback zoom_preview(int);
+    callback fit_preview();
+    callback begin_pan(float, float);
+    callback pan_preview(float, float);
 
     update_preview => {
         sync_settings();
@@ -54,6 +56,15 @@ export component MainWindow inherits Window {
     // MAIN LAYOUT
     // ========================================================
 
+    VerticalLayout {
+        spacing: 6px;
+        HorizontalLayout {
+            padding: 8px;
+            Button { text: "Открыть TAP"; clicked => { root.open_tap_file(); } }
+            Button { text: "Сохранить настройки"; clicked => { root.save_settings(); } }
+            Button { text: "Экспортировать TAP"; enabled: root.file_loaded; clicked => { root.export_tap(); } }
+            Rectangle { horizontal-stretch: 1; }
+        }
     HorizontalLayout {
         padding: 12px;
         spacing: 12px;
@@ -72,7 +83,7 @@ export component MainWindow inherits Window {
             // =================================================
 
             GroupBox {
-                title: "Settings";
+                title: "Настройки";
 
                 VerticalLayout {
                     padding: 8px;
@@ -253,47 +264,6 @@ export component MainWindow inherits Window {
 
 
             // =================================================
-            // ACTIONS
-            // =================================================
-
-            GroupBox {
-                title: "Actions";
-
-                VerticalLayout {
-                    padding: 8px;
-                    spacing: 6px;
-
-                    Button {
-                        text: "Open TAP";
-
-                        clicked => {
-                            root.open_tap_file();
-                        }
-                    }
-
-
-                    Button {
-                        text: "Save Settings";
-
-                        clicked => {
-                            root.save_settings();
-                        }
-                    }
-
-
-                    Button {
-                        text: "Export TAP";
-                        enabled: root.file_loaded;
-
-                        clicked => {
-                            root.export_tap();
-                        }
-                    }
-                }
-            }
-
-
-            // =================================================
             // FILE INFORMATION
             // =================================================
 
@@ -446,7 +416,7 @@ export component MainWindow inherits Window {
 
 
             Text {
-                text: "Preview";
+                text: "Предпросмотр";
                 font-weight: 600;
             }
 
@@ -467,6 +437,25 @@ export component MainWindow inherits Window {
 
                     image-fit: contain;
                 }
+                TouchArea {
+                    mouse-cursor: grab;
+                    moved => { root.pan_preview(self.mouse-x / 1px, self.mouse-y / 1px); }
+                    scroll-event(event) => {
+                        if (event.delta-y < 0) {
+                            root.zoom_preview(1);
+                        } else {
+                            root.zoom_preview(-1);
+                        }
+                        accept
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                Button { text: "−"; clicked => { root.zoom_preview(-1); } }
+                Button { text: "Fit"; clicked => { root.fit_preview(); } }
+                Button { text: "+"; clicked => { root.zoom_preview(1); } }
+                Text { text: "Масштаб"; color: #888888; }
             }
 
 
@@ -492,8 +481,9 @@ export component MainWindow inherits Window {
 
                 Rectangle {
                     horizontal-stretch: 1;
-                }
-            }
+        }
+    }
+}
         }
     }
 }
