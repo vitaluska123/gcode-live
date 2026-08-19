@@ -341,8 +341,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let viewport = *viewport_rc.borrow();
         let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
         let pan = (viewport.pan_x, viewport.pan_y);
-        let grid_spacing = (50.0 * viewport.zoom).clamp(20.0, 200.0) as u32;
-        preview_renderer::draw_grid(&mut buffer, grid_spacing, pan);
+        preview_renderer::draw_grid(&mut buffer, &preview_data, scale, pan);
+        preview_renderer::axes(&mut buffer, &preview_data, scale, width as f32, height as f32, pan);
 
         // Draw board (blue) - thicker lines
         preview_renderer::rectangle(&mut buffer, &preview_data.board_corners(), &preview_data, scale,

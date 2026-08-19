@@ -4,17 +4,61 @@
 use crate::preview::PreviewData;
 use slint::SharedPixelBuffer;
 
-pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, spacing: u32, pan: (f64, f64)) {
+pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &PreviewData, scale: f64, pan: (f64, f64)) {
     let (width, height) = (buffer.width(), buffer.height());
+    if scale <= 0.0 { return; }
+    let min_x = preview.board_x_min.min(preview.frame_left);
+    let max_x = preview.board_x_max.max(preview.frame_right);
+    let min_y = preview.board_y_min.min(preview.frame_bottom);
+    let max_y = preview.board_y_max.max(preview.frame_top);
+    let base_x = (width as f64 - (max_x - min_x) * scale) / 2.0 + pan.0;
+    let base_y = (height as f64 + (max_y - min_y) * scale) / 2.0 + pan.1;
+    let world_left = min_x - base_x / scale;
+    let world_right = min_x + (width as f64 - base_x) / scale;
+    let world_bottom = min_y + (base_y - height as f64) / scale;
+    let world_top = min_y + base_y / scale;
+    let step = nice_grid_step(80.0 / scale);
     let pixels = buffer.make_mut_slice();
-    let offset_x = (pan.0.round() as i32).rem_euclid(spacing as i32) as u32;
-    let offset_y = (pan.1.round() as i32).rem_euclid(spacing as i32) as u32;
-    for x in (offset_x..width).step_by(spacing as usize) {
-        for y in 0..height { pixels[(y * width + x) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
+    let first_x = (world_left / step).floor() as i64;
+    let last_x = (world_right / step).ceil() as i64;
+    for index in first_x..=last_x {
+        let x = (base_x + (index as f64 * step - min_x) * scale).round() as i32;
+        if x < 0 || x >= width as i32 { continue; }
+        for y in 0..height { pixels[(y * width + x as u32) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
     }
-    for y in (offset_y..height).step_by(spacing as usize) {
-        for x in 0..width { pixels[(y * width + x) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
+    let first_y = (world_bottom / step).floor() as i64;
+    let last_y = (world_top / step).ceil() as i64;
+    for index in first_y..=last_y {
+        let y = (base_y - (index as f64 * step - min_y) * scale).round() as i32;
+        if y < 0 || y >= height as i32 { continue; }
+        for x in 0..width { pixels[(y as u32 * width + x) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
     }
+}
+
+fn nice_grid_step(target: f64) -> f64 {
+    let exponent = target.max(f64::MIN_POSITIVE).log10().floor();
+    let base = 10_f64.powf(exponent);
+    for multiplier in [1.0, 2.0, 5.0, 10.0] {
+        let step = multiplier * base;
+        if step >= target { return step; }
+    }
+    base * 10.0
+}
+
+/// Draw world-space axes. X is red, Y is green, and both follow the camera.
+pub fn axes(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &PreviewData, scale: f64, width: f32, height: f32, pan: (f64, f64)) {
+    let (origin_x, origin_y) = preview.world_to_screen(0.0, 0.0, scale, width, height);
+    let (x_axis_end, _) = preview.world_to_screen(1.0, 0.0, scale, width, height);
+    let (_, y_axis_end) = preview.world_to_screen(0.0, 1.0, scale, width, height);
+    let x_direction = (x_axis_end - origin_x).signum();
+    let y_direction = (y_axis_end - origin_y).signum();
+    let origin_x = origin_x + pan.0 as f32;
+    let origin_y = origin_y + pan.1 as f32;
+    line(buffer, 0.0, origin_y, width, origin_y, (220, 70, 70), 2);
+    line(buffer, origin_x, 0.0, origin_x, height, (70, 210, 120), 2);
+    // Arrow tips make the positive direction unambiguous.
+    line(buffer, width - 10.0 * x_direction, origin_y - 5.0, width, origin_y, (220, 70, 70), 2);
+    line(buffer, origin_x - 5.0, 10.0 * y_direction, origin_x, 0.0, (70, 210, 120), 2);
 }
 
 pub fn polyline(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8), thickness: i32, pan: (f64, f64)) {
