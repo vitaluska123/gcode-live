@@ -231,13 +231,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let scale = preview_data.calculate_scale(width as f32, height as f32);
 
-        // Draw board (gray)
-        draw_rectangle(&mut buffer, &preview_data.board_corners(), scale, 
-                       width as f32, height as f32, (128, 128, 128));
+        // Calculate common offset for centering
+        let all_x_min = bounds.x_min.min(frame.left);
+        let all_y_min = bounds.y_min.min(frame.bottom);
+        
+        // Draw board (blue) - thicker lines
+        draw_rectangle_centered(&mut buffer, &preview_data.board_corners(), scale, 
+                                width as f32, height as f32, (0, 100, 200), all_x_min, all_y_min);
 
-        // Draw frame (red)
-        draw_rectangle(&mut buffer, &preview_data.frame_corners(), scale,
-                       width as f32, height as f32, (255, 0, 0));
+        // Draw frame (red) - thicker lines
+        draw_rectangle_centered(&mut buffer, &preview_data.frame_corners(), scale,
+                                width as f32, height as f32, (200, 0, 0), all_x_min, all_y_min);
 
         slint::Image::from_rgb8(buffer)
     });
@@ -246,14 +250,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Draw a rectangle on the pixel buffer
-fn draw_rectangle(
+/// Draw a rectangle on the pixel buffer with centered positioning
+fn draw_rectangle_centered(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     corners: &[(f64, f64)],
     scale: f64,
     width: f32,
     height: f32,
     color: (u8, u8, u8),
+    offset_x: f64,
+    offset_y: f64,
 ) {
     if corners.len() < 2 {
         return;
@@ -263,57 +269,65 @@ fn draw_rectangle(
         let (x1, y1) = corners[i];
         let (x2, y2) = corners[i + 1];
 
-        let (sx1, sy1) = transform_point(x1, y1, corners, scale, width, height);
-        let (sx2, sy2) = transform_point(x2, y2, corners, scale, width, height);
+        let (sx1, sy1) = transform_point_centered(x1, y1, scale, width, height, offset_x, offset_y);
+        let (sx2, sy2) = transform_point_centered(x2, y2, scale, width, height, offset_x, offset_y);
 
-        draw_line(buffer, sx1, sy1, sx2, sy2, color);
+        draw_thick_line(buffer, sx1, sy1, sx2, sy2, color, 2);
     }
 }
 
-/// Transform a point to screen coordinates
-fn transform_point(
+/// Transform a point to screen coordinates with common offset
+fn transform_point_centered(
     x: f64,
     y: f64,
-    corners: &[(f64, f64)],
     scale: f64,
     _width: f32,
     height: f32,
+    offset_x: f64,
+    offset_y: f64,
 ) -> (f32, f32) {
-    // Find bounds from corners
-    let mut min_x = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-
-    for (cx, cy) in corners {
-        if *cx < min_x { min_x = *cx; }
-        if *cx > max_x { max_x = *cx; }
-        if *cy < min_y { min_y = *cy; }
-        if *cy > max_y { max_y = *cy; }
-    }
-
-    let sx = ((x - min_x) * scale) as f32 + 10.0;
-    let sy = height - ((y - min_y) * scale) as f32 - 10.0;
+    let padding = 20.0;
+    let sx = ((x - offset_x) * scale) as f32 + padding;
+    let sy = height - ((y - offset_y) * scale) as f32 - padding;
 
     (sx, sy)
 }
 
-/// Draw a line using Bresenham's algorithm
-fn draw_line(
+/// Draw a thick line using Bresenham's algorithm with line width
+fn draw_thick_line(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     x0: f32,
     y0: f32,
     x1: f32,
     y1: f32,
     color: (u8, u8, u8),
+    thickness: i32,
+) {
+    let width = buffer.width() as i32;
+    let height = buffer.height() as i32;
+    
+    // For thicker lines, draw multiple parallel lines
+    for offset in 0..thickness {
+        let off = offset as f32;
+        draw_line_basic(buffer, x0, y0 + off, x1, y1 + off, color, width, height);
+    }
+}
+
+/// Basic line drawing without thickness
+fn draw_line_basic(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    color: (u8, u8, u8),
+    buf_width: i32,
+    buf_height: i32,
 ) {
     let mut x0 = x0.round() as i32;
     let mut y0 = y0.round() as i32;
     let x1 = x1.round() as i32;
     let y1 = y1.round() as i32;
-
-    let width = buffer.width() as i32;
-    let height = buffer.height() as i32;
 
     let dx = (x1 - x0).abs();
     let dy = (y1 - y0).abs();
@@ -322,10 +336,12 @@ fn draw_line(
     let mut err = dx - dy;
 
     loop {
-        if x0 >= 0 && x0 < width && y0 >= 0 && y0 < height {
+        if x0 >= 0 && x0 < buf_width && y0 >= 0 && y0 < buf_height {
             let pixels = buffer.make_mut_slice();
-            let idx = (y0 * width + x0) as usize;
-            pixels[idx] = slint::Rgb8Pixel::new(color.0, color.1, color.2);
+            let idx = (y0 * buf_width + x0) as usize;
+            if idx < pixels.len() {
+                pixels[idx] = slint::Rgb8Pixel::new(color.0, color.1, color.2);
+            }
         }
 
         if x0 == x1 && y0 == y1 {
@@ -342,4 +358,17 @@ fn draw_line(
             y0 += sy;
         }
     }
+}
+
+/// Draw a line using Bresenham's algorithm (kept for compatibility)
+#[allow(dead_code)]
+fn draw_line(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    color: (u8, u8, u8),
+) {
+    draw_thick_line(buffer, x0, y0, x1, y1, color, 1);
 }
