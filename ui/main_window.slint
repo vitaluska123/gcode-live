@@ -1,0 +1,239 @@
+// PCB Frame Generator - Main Window UI
+
+export global UiSettings {
+    in-out property<float> offset_x: 10.0;
+    in-out property<float> offset_y: 10.0;
+    in-out property<float> clamp_zone: 5.0;
+    in-out property<float> safe_zone: 3.0;
+    in-out property<float> tool_diameter: 3.175;
+    in-out property<float> cut_depth: 1.6;
+    in-out property<float> step_depth: 0.4;
+    in-out property<int> feed_rate: 120;
+    in-out property<int> spindle_speed: 800;
+}
+
+export component MainWindow inherits Window {
+    width: 1200px;
+    height: 800px;
+    title: "PCB Frame Generator";
+
+    in-out property<string> board_width: "";
+    in-out property<string> board_height: "";
+    in-out property<string> x_min: "";
+    in-out property<string> x_max: "";
+    in-out property<string> y_min: "";
+    in-out property<string> y_max: "";
+    in-out property<string> frame_width: "";
+    in-out property<string> frame_height: "";
+    in-out property<bool> file_loaded: false;
+    in-out property<image> preview_image;
+
+    callback open_tap_file();
+    callback save_settings();
+    callback export_tap();
+    callback show_error(string);
+    callback update_preview();
+    callback render_preview(float, float) -> image;
+
+    HorizontalLayout {
+        spacing: 10px;
+        padding: 10px;
+
+        VerticalLayout {
+            preferred-width: 350px;
+            spacing: 15px;
+
+            Rectangle {
+                background: #e8e8e8;
+                border-radius: 5px;
+                preferred-height: 400px;
+
+                VerticalLayout {
+                    spacing: 8px;
+                    padding: 10px;
+
+                    Text { text: "Settings"; font-size: 16px; font-weight: 600; }
+
+                    Text { text: "Offset X (mm):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.offset_x + "";
+                        accepted => { UiSettings.offset_x = self.text.to-float(); }
+                    }
+
+                    Text { text: "Offset Y (mm):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.offset_y + "";
+                        accepted => { UiSettings.offset_y = self.text.to-float(); }
+                    }
+
+                    Text { text: "Clamp Zone (mm):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.clamp_zone + "";
+                        accepted => { UiSettings.clamp_zone = self.text.to-float(); }
+                    }
+
+                    Text { text: "Safe Zone (mm):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.safe_zone + "";
+                        accepted => { UiSettings.safe_zone = self.text.to-float(); }
+                    }
+
+                    Text { text: "Tool Diameter (mm):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.tool_diameter + "";
+                        accepted => { UiSettings.tool_diameter = self.text.to-float(); }
+                    }
+
+                    Text { text: "Cut Depth (mm):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.cut_depth + "";
+                        accepted => { UiSettings.cut_depth = self.text.to-float(); }
+                    }
+
+                    Text { text: "Step Depth (mm):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.step_depth + "";
+                        accepted => { UiSettings.step_depth = self.text.to-float(); }
+                    }
+
+                    Text { text: "Feed Rate (mm/min):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.feed_rate + "";
+                    }
+
+                    Text { text: "Spindle Speed (RPM):"; font-size: 14px; }
+                    TextInput {
+                        text: UiSettings.spindle_speed + "";
+                    }
+                }
+            }
+
+            VerticalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    background: #4a90d9;
+                    border-radius: 5px;
+                    min-height: 40px;
+                    min-width: 200px;
+                    Text {
+                        text: "Open TAP";
+                        color: white;
+                        font-size: 14px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.open_tap_file(); } }
+                }
+
+                Rectangle {
+                    background: #4a90d9;
+                    border-radius: 5px;
+                    min-height: 40px;
+                    min-width: 200px;
+                    Text {
+                        text: "Save Settings";
+                        color: white;
+                        font-size: 14px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea { clicked => { root.save_settings(); } }
+                }
+
+                Rectangle {
+                    background: root.file_loaded ? #4a90d9 : #cccccc;
+                    border-radius: 5px;
+                    min-height: 40px;
+                    min-width: 200px;
+                    Text {
+                        text: "Export TAP";
+                        color: white;
+                        font-size: 14px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    TouchArea {
+                        enabled: root.file_loaded;
+                        clicked => { root.export_tap(); }
+                    }
+                }
+            }
+
+            Rectangle {
+                background: #e8e8e8;
+                border-radius: 5px;
+
+                VerticalLayout {
+                    spacing: 5px;
+                    padding: 10px;
+
+                    Text { text: "File Information"; font-size: 16px; font-weight: 600; }
+
+                    Text { text: "Board Dimensions:"; font-weight: 600; }
+                    Text { text: "Width: " + root.board_width; }
+                    Text { text: "Height: " + root.board_height; }
+
+                    Rectangle { height: 1px; background: gray; }
+
+                    Text { text: "Board Bounds:"; font-weight: 600; }
+                    Text { text: "X Min: " + root.x_min; }
+                    Text { text: "X Max: " + root.x_max; }
+                    Text { text: "Y Min: " + root.y_min; }
+                    Text { text: "Y Max: " + root.y_max; }
+
+                    Rectangle { height: 1px; background: gray; }
+
+                    Text { text: "Frame Dimensions:"; font-weight: 600; }
+                    Text { text: "Width: " + root.frame_width; }
+                    Text { text: "Height: " + root.frame_height; }
+                }
+            }
+        }
+
+        Rectangle {
+            background: #f0f0f0;
+            border-radius: 5px;
+
+            Image {
+                source: root.preview_image;
+                width: 100%;
+                height: 100%;
+                image-fit: contain;
+            }
+
+            Text {
+                text: "Preview";
+                font-size: 18px;
+                font-weight: 600;
+                color: #333;
+                horizontal-alignment: center;
+                padding: 10px;
+            }
+
+            Rectangle {
+                background: white;
+                border-radius: 3px;
+                width: 150px;
+                height: 60px;
+                x: 10px;
+                y: 10px;
+
+                VerticalLayout {
+                    padding: 5px;
+                    spacing: 3px;
+
+                    HorizontalLayout {
+                        Rectangle { width: 20px; height: 3px; background: gray; }
+                        Text { text: "Board"; font-size: 12px; }
+                    }
+
+                    HorizontalLayout {
+                        Rectangle { width: 20px; height: 3px; background: red; }
+                        Text { text: "Frame"; font-size: 12px; }
+                    }
+                }
+            }
+        }
+    }
+}
