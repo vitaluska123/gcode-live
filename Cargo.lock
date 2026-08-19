@@ -3617,12 +3617,15 @@ name = "pcb-frame-generator"
 version = "0.1.0"
 dependencies = [
  "glow",
+ "glutin",
+ "glutin-winit",
  "rfd",
  "serde",
  "serde_json",
  "slint",
  "slint-build",
  "thiserror 1.0.69",
+ "winit",
 ]
 
 [[package]]

@@ -178,6 +178,28 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         *pointer_state.borrow_mut() = Some(current);
         if let Some(window) = window_weak.upgrade() { window.invoke_update_preview(); }
     });
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_viewport = Rc::downgrade(&viewport);
+    let window_weak = main_window.as_weak();
+    main_window.on_cursor_moved(move |x, y, width, height| {
+        if width <= 0.0 || height <= 0.0 { return; }
+        let (Some(window), Some(board), Some(frame), Some(viewport)) = (
+            window_weak.upgrade(), weak_board.upgrade(), weak_frame.upgrade(), weak_viewport.upgrade(),
+        ) else { return; };
+        let (Some(bounds), Some(frame)) = (board.borrow().as_ref().cloned(), frame.borrow().as_ref().cloned()) else { return; };
+        let data = preview::PreviewData::from_bounds(bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max, frame.left, frame.right, frame.bottom, frame.top);
+        let camera = *viewport.borrow();
+        let scale = data.calculate_scale(width, height) * camera.zoom;
+        if scale <= 0.0 { return; }
+        let min_x = data.board_x_min.min(data.frame_left);
+        let min_y = data.board_y_min.min(data.frame_bottom);
+        let content_width = data.board_x_max.max(data.frame_right) - min_x;
+        let content_height = data.board_y_max.max(data.frame_top) - min_y;
+        let world_x = min_x + (x as f64 - (width as f64 - content_width * scale) / 2.0 - camera.pan_x) / scale;
+        let world_y = min_y + ((height as f64 + content_height * scale) / 2.0 + camera.pan_y - y as f64) / scale;
+        window.set_cursor_coordinates(format!("X: {world_x:.3}   Y: {world_y:.3}").into());
+    });
 
     // Save settings handler
     let board_bounds_clone = board_bounds.clone();
@@ -301,8 +323,6 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         for pixel in buffer.make_mut_slice() {
             *pixel = slint::Rgb8Pixel::new(14, 17, 22);
         }
-        preview_renderer::draw_grid(&mut buffer);
-
         let board_borrow = board_rc.borrow();
         let Some(bounds) = board_borrow.as_ref() else {
             return slint::Image::from_rgb8(buffer);
@@ -321,6 +341,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let viewport = *viewport_rc.borrow();
         let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
         let pan = (viewport.pan_x, viewport.pan_y);
+        let grid_spacing = (50.0 * viewport.zoom).clamp(20.0, 200.0) as u32;
+        preview_renderer::draw_grid(&mut buffer, grid_spacing, pan);
 
         // Draw board (blue) - thicker lines
         preview_renderer::rectangle(&mut buffer, &preview_data.board_corners(), &preview_data, scale,

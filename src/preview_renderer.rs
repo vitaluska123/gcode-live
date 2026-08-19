@@ -4,13 +4,15 @@
 use crate::preview::PreviewData;
 use slint::SharedPixelBuffer;
 
-pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>) {
+pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, spacing: u32, pan: (f64, f64)) {
     let (width, height) = (buffer.width(), buffer.height());
     let pixels = buffer.make_mut_slice();
-    for x in (0..width).step_by(50) {
+    let offset_x = (pan.0.round() as i32).rem_euclid(spacing as i32) as u32;
+    let offset_y = (pan.1.round() as i32).rem_euclid(spacing as i32) as u32;
+    for x in (offset_x..width).step_by(spacing as usize) {
         for y in 0..height { pixels[(y * width + x) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
     }
-    for y in (0..height).step_by(50) {
+    for y in (offset_y..height).step_by(spacing as usize) {
         for x in 0..width { pixels[(y * width + x) as usize] = slint::Rgb8Pixel::new(42, 48, 58); }
     }
 }
@@ -30,6 +32,7 @@ pub fn rectangle(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, corners: &[(f
 fn line(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x0: f32, y0: f32, x1: f32, y1: f32, color: (u8, u8, u8), thickness: i32) {
     let buffer_width = buffer.width() as i32;
     let buffer_height = buffer.height() as i32;
+    let pixels = buffer.make_mut_slice();
     for offset in 0..thickness {
         let (mut x, mut y) = (x0.round() as i32, y0.round() as i32 + offset);
         let (end_x, end_y) = (x1.round() as i32, y1.round() as i32 + offset);
@@ -38,7 +41,7 @@ fn line(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x0: f32, y0: f32, x1: 
         let mut error = dx + dy;
         loop {
             if x >= 0 && y >= 0 && x < buffer_width && y < buffer_height {
-                buffer.make_mut_slice()[(y * buffer_width + x) as usize] = slint::Rgb8Pixel::new(color.0, color.1, color.2);
+                pixels[(y * buffer_width + x) as usize] = slint::Rgb8Pixel::new(color.0, color.1, color.2);
             }
             if x == end_x && y == end_y { break; }
             let twice = 2 * error;
