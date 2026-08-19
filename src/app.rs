@@ -293,6 +293,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     // Preview render handler - creates a simple line representation
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
 
     main_window.on_render_preview(move |width, height| {
@@ -313,6 +314,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let Some(frame_rc) = weak_frame.upgrade() else {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
         };
+        let Some(settings_rc) = weak_settings.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
         let Some(path_rc) = weak_toolpath.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
         let Some(rapid_rc) = weak_rapid_path.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
         let Some(viewport_rc) = weak_viewport.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
@@ -343,6 +345,29 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let pan = (viewport.pan_x, viewport.pan_y);
         preview_renderer::draw_grid(&mut buffer, &preview_data, scale, pan);
         preview_renderer::axes(&mut buffer, &preview_data, scale, width as f32, height as f32, pan);
+
+        let settings = settings_rc.borrow().clone();
+        let mut tool_clearance = settings.clone();
+        tool_clearance.offset_x = 0.0;
+        tool_clearance.offset_y = 0.0;
+        tool_clearance.clamp_zone = 0.0;
+        tool_clearance.safe_zone = 0.0;
+        let mut safe_zone = tool_clearance.clone();
+        safe_zone.safe_zone = settings.safe_zone;
+        let mut clamp_zone = safe_zone.clone();
+        clamp_zone.clamp_zone = settings.clamp_zone;
+        for (overlay_settings, color) in [
+            (&tool_clearance, (110, 180, 255)),
+            (&safe_zone, (255, 205, 70)),
+            (&clamp_zone, (255, 135, 70)),
+        ] {
+            if let Some(overlay) = frame::FrameGeometry::calculate(&bounds, overlay_settings) {
+                preview_renderer::rectangle(&mut buffer, &[
+                    (overlay.left, overlay.bottom), (overlay.right, overlay.bottom),
+                    (overlay.right, overlay.top), (overlay.left, overlay.top), (overlay.left, overlay.bottom),
+                ], &preview_data, scale, width as f32, height as f32, color, pan);
+            }
+        }
 
         // Draw board (blue) - thicker lines
         preview_renderer::rectangle(&mut buffer, &preview_data.board_corners(), &preview_data, scale,
