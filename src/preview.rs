@@ -1,4 +1,3 @@
-use slint::{SharedPixelBuffer, Rgb8Pixel};
 
 /// Preview data for rendering board and frame
 #[derive(Debug, Clone)]
@@ -93,7 +92,7 @@ impl PreviewData {
         x: f64,
         y: f64,
         scale: f64,
-        widget_width: f32,
+        _widget_width: f32,
         widget_height: f32,
     ) -> (f32, f32) {
         // Find overall bounds for centering
