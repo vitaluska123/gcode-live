@@ -105,6 +105,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Save settings handler
+    let board_bounds_clone = board_bounds.clone();
+    let frame_geometry_clone = frame_geometry.clone();
     let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
 
@@ -114,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let ui_settings = window.global::<UiSettings>();
         
-        let mut new_settings = settings::Settings {
+        let new_settings = settings::Settings {
             offset_x: ui_settings.get_offset_x() as f64,
             offset_y: ui_settings.get_offset_y() as f64,
             clamp_zone: ui_settings.get_clamp_zone() as f64,
@@ -134,9 +136,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         *settings_rc.borrow_mut() = new_settings;
 
         // Recalculate frame if we have board data
-        if let Some(bounds) = board_bounds.borrow().as_ref() {
+        if let Some(bounds) = board_bounds_clone.borrow().as_ref() {
             if let Some(frame) = frame::FrameGeometry::calculate(bounds, &*settings_rc.borrow()) {
-                *frame_geometry.borrow_mut() = Some(frame);
+                *frame_geometry_clone.borrow_mut() = Some(frame);
                 window.invoke_update_preview();
             }
         }
@@ -154,12 +156,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Some(frame_rc) = weak_frame.upgrade() else { return; };
         let Some(settings_rc) = weak_settings.upgrade() else { return; };
 
-        let Some(bounds) = board_rc.borrow().as_ref() else {
+        let board_borrow = board_rc.borrow();
+        let Some(bounds) = board_borrow.as_ref() else {
             window.invoke_show_error("No board data loaded.".into());
             return;
         };
 
-        let Some(frame) = frame_rc.borrow().as_ref() else {
+        let frame_borrow = frame_rc.borrow();
+        let Some(frame) = frame_borrow.as_ref() else {
             window.invoke_show_error("No frame geometry calculated.".into());
             return;
         };
@@ -192,7 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
         }
 
-        let Some(window) = window_weak.upgrade() else {
+        let Some(_window) = window_weak.upgrade() else {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
         };
 
@@ -210,10 +214,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             *pixel = slint::Rgb8Pixel::new(255, 255, 255);
         }
 
-        let Some(bounds) = board_rc.borrow().as_ref() else {
+        let board_borrow = board_rc.borrow();
+        let Some(bounds) = board_borrow.as_ref() else {
             return slint::Image::from_rgb8(buffer);
         };
-        let Some(frame) = frame_rc.borrow().as_ref() else {
+
+        let frame_borrow = frame_rc.borrow();
+        let Some(frame) = frame_borrow.as_ref() else {
             return slint::Image::from_rgb8(buffer);
         };
 
@@ -251,8 +258,6 @@ fn draw_rectangle(
     if corners.len() < 2 {
         return;
     }
-
-    let preview_data = preview::PreviewData::from_bounds(0.0, 100.0, 0.0, 100.0, 0.0, 100.0, 0.0, 100.0);
 
     for i in 0..corners.len() - 1 {
         let (x1, y1) = corners[i];
