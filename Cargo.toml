@@ -21,3 +21,9 @@ path = "src/main.rs"
 
 [build-dependencies]
 slint-build = "1.17.1"
+
+# `cargo run` is the normal way this desktop application is launched during
+# development. A small optimisation level keeps Slint's text editor responsive
+# while retaining debug information and fast enough rebuilds.
+[profile.dev]
+opt-level = 2

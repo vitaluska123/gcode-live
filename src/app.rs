@@ -137,13 +137,89 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         window.set_frame_height(format!("{:.3} mm", frame_height).into());
         window.set_file_loaded(true);
 
-        *board_rc.borrow_mut() = Some(bounds);
-        *frame_rc.borrow_mut() = Some(frame);
+        *board_rc.borrow_mut() = Some(bounds.clone());
+        *frame_rc.borrow_mut() = Some(frame.clone());
         *home_rc.borrow_mut() = home;
         *path_rc.borrow_mut() = path;
         *rapid_rc.borrow_mut() = rapid;
+        window.set_source_gcode(content.clone().into());
+        window.set_final_gcode(exporter::generate_frame_gcode(
+            &bounds,
+            &frame,
+            &settings_rc.borrow(),
+            home,
+        ).into());
 
         // Trigger preview update
+        window.invoke_update_preview();
+    });
+
+    // Applying the source editor replaces the source program and recomputes
+    // every derived value: bounds, parking position, cutting parameters and frame.
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
+    let weak_home = Rc::downgrade(&source_home);
+    let weak_toolpath = Rc::downgrade(&toolpath);
+    let weak_rapid_path = Rc::downgrade(&rapid_path);
+    let window_weak = main_window.as_weak();
+    main_window.on_apply_source_gcode(move || {
+        let (Some(window), Some(board_rc), Some(frame_rc), Some(settings_rc), Some(home_rc), Some(path_rc), Some(rapid_rc)) = (
+            window_weak.upgrade(), weak_board.upgrade(), weak_frame.upgrade(), weak_settings.upgrade(),
+            weak_home.upgrade(), weak_toolpath.upgrade(), weak_rapid_path.upgrade(),
+        ) else { return; };
+        let content = window.get_source_gcode().to_string();
+        let bounds = frame::parse_gcode_bounds(&content);
+        if !bounds.is_valid() {
+            window.invoke_show_error("В исходном G-code не найдена корректная траектория G1.".into());
+            return;
+        }
+        let home = frame::parse_gcode_home_position(&content);
+        let path = frame::parse_gcode_toolpath(&content);
+        let rapid = frame::parse_gcode_rapid_path(&content);
+        let settings = {
+            let mut settings = settings_rc.borrow_mut();
+            frame::apply_source_cutting_parameters(&content, &mut settings);
+            settings.clone()
+        };
+        let Some(generated_frame) = frame::FrameGeometry::calculate(&bounds, &settings) else {
+            window.invoke_show_error("Не удалось вычислить рамку.".into());
+            return;
+        };
+        window.set_board_width(format!("{:.3} mm", bounds.width()).into());
+        window.set_board_height(format!("{:.3} mm", bounds.height()).into());
+        window.set_x_min(format!("{:.3}", bounds.x_min).into());
+        window.set_x_max(format!("{:.3}", bounds.x_max).into());
+        window.set_y_min(format!("{:.3}", bounds.y_min).into());
+        window.set_y_max(format!("{:.3}", bounds.y_max).into());
+        window.set_frame_width(format!("{:.3} mm", generated_frame.width()).into());
+        window.set_frame_height(format!("{:.3} mm", generated_frame.height()).into());
+        *board_rc.borrow_mut() = Some(bounds.clone());
+        *frame_rc.borrow_mut() = Some(generated_frame.clone());
+        *home_rc.borrow_mut() = home;
+        *path_rc.borrow_mut() = path;
+        *rapid_rc.borrow_mut() = rapid;
+        window.set_final_gcode(exporter::generate_frame_gcode(&bounds, &generated_frame, &settings, home).into());
+        window.invoke_update_preview();
+    });
+
+    // Applying final text is deliberately preview-only: source geometry and
+    // generation settings stay untouched.
+    let weak_toolpath = Rc::downgrade(&toolpath);
+    let weak_rapid_path = Rc::downgrade(&rapid_path);
+    let window_weak = main_window.as_weak();
+    main_window.on_apply_final_gcode(move || {
+        let (Some(window), Some(path_rc), Some(rapid_rc)) = (
+            window_weak.upgrade(), weak_toolpath.upgrade(), weak_rapid_path.upgrade(),
+        ) else { return; };
+        let content = window.get_final_gcode().to_string();
+        let path = frame::parse_gcode_toolpath(&content);
+        if path.is_empty() {
+            window.invoke_show_error("В финальном G-code не найдена траектория G1.".into());
+            return;
+        }
+        *path_rc.borrow_mut() = path;
+        *rapid_rc.borrow_mut() = frame::parse_gcode_rapid_path(&content);
         window.invoke_update_preview();
     });
 
@@ -292,8 +368,18 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let window_weak = main_window.as_weak();
 
     main_window.on_render_preview(move |width, height| {
-        let width = width as u32;
-        let height = height as u32;
+        let requested_width = width.max(1.0) as f64;
+        let requested_height = height.max(1.0) as f64;
+        // The current preview is CPU-rendered. Rendering a full window-sized
+        // pixel buffer for every mouse-move needlessly stalls the UI. Keep the
+        // aspect ratio but cap the working surface to a responsive size; Slint
+        // scales that image to the viewport afterwards.
+        const MAX_PREVIEW_PIXELS: f64 = 360_000.0;
+        let reduction = (MAX_PREVIEW_PIXELS / (requested_width * requested_height))
+            .sqrt()
+            .min(1.0);
+        let width = (requested_width * reduction).round().max(1.0) as u32;
+        let height = (requested_height * reduction).round().max(1.0) as u32;
 
         if width == 0 || height == 0 {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
