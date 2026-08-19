@@ -15,16 +15,16 @@ pub fn draw_grid(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>) {
     }
 }
 
-pub fn polyline(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8), thickness: i32) {
+pub fn polyline(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8), thickness: i32, pan: (f64, f64)) {
     for pair in points.windows(2) {
         let (x1, y1) = preview.world_to_screen(pair[0].0, pair[0].1, scale, width, height);
         let (x2, y2) = preview.world_to_screen(pair[1].0, pair[1].1, scale, width, height);
-        line(buffer, x1, y1, x2, y2, color, thickness);
+        line(buffer, x1 + pan.0 as f32, y1 + pan.1 as f32, x2 + pan.0 as f32, y2 + pan.1 as f32, color, thickness);
     }
 }
 
-pub fn rectangle(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, corners: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8)) {
-    polyline(buffer, corners, preview, scale, width, height, color, 2);
+pub fn rectangle(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, corners: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8), pan: (f64, f64)) {
+    polyline(buffer, corners, preview, scale, width, height, color, 2, pan);
 }
 
 fn line(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x0: f32, y0: f32, x1: f32, y1: f32, color: (u8, u8, u8), thickness: i32) {
