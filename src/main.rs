@@ -1,6 +1,6 @@
 slint::include_modules!();
 
-use slint::{ComponentHandle, SharedPixelBuffer, Rgb8Pixel};
+use slint::{ComponentHandle, SharedPixelBuffer};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -206,10 +206,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut buffer = SharedPixelBuffer::<slint::Rgb8Pixel>::new(width, height);
 
         // Fill with white background
-        for y in 0..height {
-            for x in 0..width {
-                *buffer.pixel_mut(x, y) = slint::Rgb8Pixel::new(255, 255, 255);
-            }
+        for pixel in buffer.make_mut_slice() {
+            *pixel = slint::Rgb8Pixel::new(255, 255, 255);
         }
 
         let Some(bounds) = board_rc.borrow().as_ref() else {
@@ -260,8 +258,8 @@ fn draw_rectangle(
         let (x1, y1) = corners[i];
         let (x2, y2) = corners[i + 1];
 
-        let (sx1, sy1) = transform_point(*x1, *y1, corners, scale, width, height);
-        let (sx2, sy2) = transform_point(*x2, *y2, corners, scale, width, height);
+        let (sx1, sy1) = transform_point(x1, y1, corners, scale, width, height);
+        let (sx2, sy2) = transform_point(x2, y2, corners, scale, width, height);
 
         draw_line(buffer, sx1, sy1, sx2, sy2, color);
     }
@@ -273,7 +271,7 @@ fn transform_point(
     y: f64,
     corners: &[(f64, f64)],
     scale: f64,
-    width: f32,
+    _width: f32,
     height: f32,
 ) -> (f32, f32) {
     // Find bounds from corners
@@ -320,8 +318,9 @@ fn draw_line(
 
     loop {
         if x0 >= 0 && x0 < width && y0 >= 0 && y0 < height {
-            let pixel = buffer.pixel_mut(x0 as u32, y0 as u32);
-            *pixel = slint::Rgb8Pixel::from_rgb(color.0, color.1, color.2);
+            let pixels = buffer.make_mut_slice();
+            let idx = (y0 * width + x0) as usize;
+            pixels[idx] = slint::Rgb8Pixel::new(color.0, color.1, color.2);
         }
 
         if x0 == x1 && y0 == y1 {

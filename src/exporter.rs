@@ -3,7 +3,7 @@ use crate::settings::Settings;
 
 /// Generate G-code for the frame cutting operation
 pub fn generate_frame_gcode(
-    bounds: &BoardBounds,
+    _bounds: &BoardBounds,
     frame: &FrameGeometry,
     settings: &Settings,
 ) -> String {
