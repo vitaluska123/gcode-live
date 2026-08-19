@@ -304,7 +304,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
         }
 
-        let Some(_window) = window_weak.upgrade() else {
+        let Some(window) = window_weak.upgrade() else {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
         };
 
@@ -347,6 +347,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         preview_renderer::axes(&mut buffer, &preview_data, scale, width as f32, height as f32, pan);
 
         let settings = settings_rc.borrow().clone();
+        let overlay_visibility = window.global::<UiSettings>();
         let mut tool_clearance = settings.clone();
         tool_clearance.offset_x = 0.0;
         tool_clearance.offset_y = 0.0;
@@ -356,16 +357,19 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         safe_zone.safe_zone = settings.safe_zone;
         let mut clamp_zone = safe_zone.clone();
         clamp_zone.clamp_zone = settings.clamp_zone;
-        for (overlay_settings, color) in [
-            (&tool_clearance, (110, 180, 255)),
-            (&safe_zone, (255, 205, 70)),
-            (&clamp_zone, (255, 135, 70)),
+        for (overlay_settings, color, visible, dimension) in [
+            (&tool_clearance, (55, 90, 128), overlay_visibility.get_show_tool(), settings.tool_diameter),
+            (&safe_zone, (128, 103, 35), overlay_visibility.get_show_safe(), settings.safe_zone),
+            (&clamp_zone, (128, 68, 35), overlay_visibility.get_show_clamp(), settings.clamp_zone),
         ] {
-            if let Some(overlay) = frame::FrameGeometry::calculate(&bounds, overlay_settings) {
-                preview_renderer::rectangle(&mut buffer, &[
-                    (overlay.left, overlay.bottom), (overlay.right, overlay.bottom),
-                    (overlay.right, overlay.top), (overlay.left, overlay.top), (overlay.left, overlay.bottom),
-                ], &preview_data, scale, width as f32, height as f32, color, pan);
+            if visible {
+                if let Some(overlay) = frame::FrameGeometry::calculate(&bounds, overlay_settings) {
+                    preview_renderer::rectangle(&mut buffer, &[
+                        (overlay.left, overlay.bottom), (overlay.right, overlay.bottom),
+                        (overlay.right, overlay.top), (overlay.left, overlay.top), (overlay.left, overlay.bottom),
+                    ], &preview_data, scale, width as f32, height as f32, color, pan);
+                    preview_renderer::dimension_label(&mut buffer, &preview_data, scale, width as f32, height as f32, pan, overlay.right, overlay.bottom, dimension);
+                }
             }
         }
 
@@ -374,8 +378,11 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
                        width as f32, height as f32, (0, 100, 200), pan);
 
         // Draw frame (red) - thicker lines
-        preview_renderer::rectangle(&mut buffer, &preview_data.frame_corners(), &preview_data, scale,
-                       width as f32, height as f32, (200, 0, 0), pan);
+        if overlay_visibility.get_show_offset() {
+            preview_renderer::rectangle(&mut buffer, &preview_data.frame_corners(), &preview_data, scale,
+                           width as f32, height as f32, (110, 35, 35), pan);
+            preview_renderer::dimension_label(&mut buffer, &preview_data, scale, width as f32, height as f32, pan, frame.right, frame.bottom, settings.offset_x.max(settings.offset_y));
+        }
         let path = path_rc.borrow();
         preview_renderer::polyline(&mut buffer, &path, &preview_data, scale, width as f32, height as f32, (0, 210, 255), 2, pan);
         let rapid = rapid_rc.borrow();

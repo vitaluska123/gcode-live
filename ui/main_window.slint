@@ -15,6 +15,10 @@ export global UiSettings {
     in-out property<float> step_depth: 0.4;
     in-out property<float> feed_rate: 120;
     in-out property<float> spindle_speed: 800;
+    in-out property<bool> show-offset: true;
+    in-out property<bool> show-clamp: true;
+    in-out property<bool> show-safe: true;
+    in-out property<bool> show-tool: true;
 }
 
 export component MainWindow inherits Window {
@@ -96,7 +100,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Offset X (mm):";
+                            text: "Отступ X (мм):";
                             vertical-alignment: center;
                         }
 
@@ -115,7 +119,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Offset Y (mm):";
+                            text: "Отступ Y (мм):";
                             vertical-alignment: center;
                         }
 
@@ -134,7 +138,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Clamp Zone (mm):";
+                            text: "Зона зажимов (мм):";
                             vertical-alignment: center;
                         }
 
@@ -153,7 +157,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Safe Zone (mm):";
+                            text: "Безопасная зона (мм):";
                             vertical-alignment: center;
                         }
 
@@ -172,7 +176,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Tool Diameter (mm):";
+                            text: "Диаметр инструмента (мм):";
                             vertical-alignment: center;
                         }
 
@@ -459,6 +463,21 @@ export component MainWindow inherits Window {
                             root.zoom_preview(1);
                         }
                         accept
+                    }
+                }
+                Rectangle {
+                    x: preview.width - self.width;
+                    width: 132px;
+                    height: 116px;
+                    background: #20242ccc;
+                    VerticalLayout {
+                        padding: 6px;
+                        spacing: 4px;
+                        Text { text: "Слои"; color: #dddddd; }
+                        Rectangle { height: 19px; background: UiSettings.show-offset ? #6e2323 : #666666; Text { text: "Отступы"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-offset = !UiSettings.show-offset; root.update_preview(); } } }
+                        Rectangle { height: 19px; background: UiSettings.show-clamp ? #804423 : #666666; Text { text: "Зажимы"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-clamp = !UiSettings.show-clamp; root.update_preview(); } } }
+                        Rectangle { height: 19px; background: UiSettings.show-safe ? #806723 : #666666; Text { text: "Безопасность"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-safe = !UiSettings.show-safe; root.update_preview(); } } }
+                        Rectangle { height: 19px; background: UiSettings.show-tool ? #375b80 : #666666; Text { text: "Инструмент"; color: white; horizontal-alignment: center; vertical-alignment: center; } TouchArea { clicked => { UiSettings.show-tool = !UiSettings.show-tool; root.update_preview(); } } }
                     }
                 }
             }

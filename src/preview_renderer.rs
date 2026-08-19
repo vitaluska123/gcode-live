@@ -88,6 +88,11 @@ pub fn axes(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &PreviewD
     line(buffer, origin_x - 5.0, 10.0 * y_direction, origin_x, 0.0, (70, 210, 120), 2);
 }
 
+pub fn dimension_label(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, preview: &PreviewData, scale: f64, width: f32, height: f32, pan: (f64, f64), x: f64, y: f64, value: f64) {
+    let (screen_x, screen_y) = preview.world_to_screen(x, y, scale, width, height);
+    draw_number(buffer, screen_x as i32 + pan.0 as i32 + 4, screen_y as i32 + pan.1 as i32 + 4, value);
+}
+
 pub fn polyline(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, points: &[(f64, f64)], preview: &PreviewData, scale: f64, width: f32, height: f32, color: (u8, u8, u8), thickness: i32, pan: (f64, f64)) {
     for pair in points.windows(2) {
         let (x1, y1) = preview.world_to_screen(pair[0].0, pair[0].1, scale, width, height);
