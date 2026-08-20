@@ -42,6 +42,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
     let weak_settings = Rc::downgrade(&current_settings);
+    let weak_home = Rc::downgrade(&source_home);
     let window_weak = main_window.as_weak();
     main_window.on_sync_settings(move || {
         let Some(window) = window_weak.upgrade() else {
@@ -75,11 +76,25 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let Some(frame_rc) = weak_frame.upgrade() else {
             return;
         };
+        let Some(home_rc) = weak_home.upgrade() else {
+            return;
+        };
         let bounds = board_rc.borrow().clone();
         if let Some(bounds) = bounds {
             if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
                 window.set_frame_width(format!("{:.3} mm", frame.width()).into());
                 window.set_frame_height(format!("{:.3} mm", frame.height()).into());
+                // Keep the editor in sync with export: the displayed program
+                // is already expressed in global machine coordinates.
+                window.set_final_gcode(
+                    exporter::generate_frame_gcode(
+                        &bounds,
+                        &frame,
+                        &new_settings,
+                        *home_rc.borrow(),
+                    )
+                    .into(),
+                );
                 *frame_rc.borrow_mut() = Some(frame);
             }
         }
@@ -285,12 +300,61 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     let viewport_state = viewport.clone();
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
     main_window.on_fit_preview(move || {
-        viewport_state.borrow_mut().reset();
-        if let Some(window) = window_weak.upgrade() {
-            window.invoke_update_preview();
-        }
+        let (Some(window), Some(board_rc), Some(frame_rc), Some(settings_rc)) = (
+            window_weak.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_settings.upgrade(),
+        ) else {
+            return;
+        };
+        let (Some(bounds), Some(frame)) = (
+            board_rc.borrow().as_ref().cloned(),
+            frame_rc.borrow().as_ref().cloned(),
+        ) else {
+            return;
+        };
+        let settings = settings_rc.borrow().clone();
+        let (shift_x, shift_y) = settings.local_offset();
+        let preview = preview::PreviewData::from_bounds_with_material(
+            bounds.x_min + shift_x,
+            bounds.x_max + shift_x,
+            bounds.y_min + shift_y,
+            bounds.y_max + shift_y,
+            frame.left + shift_x,
+            frame.right + shift_x,
+            frame.bottom + shift_y,
+            frame.top + shift_y,
+            settings.material_width,
+            settings.material_height,
+        );
+        let width = window.get_preview_width().max(1.0) as f64;
+        let height = window.get_preview_height().max(1.0) as f64;
+        let desired_scale = ((width - 40.0) / frame.width().max(1.0))
+            .min((height - 40.0) / frame.height().max(1.0));
+        let base_scale = preview
+            .calculate_scale(width as f32, height as f32)
+            .max(f64::MIN_POSITIVE);
+        let (min_x, max_x, min_y, max_y) = preview.world_bounds();
+        let center_x = (frame.left + frame.right) / 2.0 + shift_x;
+        let center_y = (frame.bottom + frame.top) / 2.0 + shift_y;
+        let content_width = max_x - min_x;
+        let content_height = max_y - min_y;
+        let screen_x =
+            (width - content_width * desired_scale) / 2.0 + (center_x - min_x) * desired_scale;
+        let screen_y =
+            (height + content_height * desired_scale) / 2.0 - (center_y - min_y) * desired_scale;
+        *viewport_state.borrow_mut() = Viewport {
+            zoom: (desired_scale / base_scale).clamp(0.1, 20.0),
+            pan_x: width / 2.0 - screen_x,
+            pan_y: height / 2.0 - screen_y,
+        };
+        window.invoke_update_preview();
     });
     let pointer_state = pointer_position.clone();
     main_window.on_begin_pan(move |x, y| {
@@ -374,7 +438,16 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             + (x as f64 - (width as f64 - content_width * scale) / 2.0 - camera.pan_x) / scale;
         let world_y = min_y
             + ((height as f64 + content_height * scale) / 2.0 + camera.pan_y - y as f64) / scale;
-        window.set_cursor_coordinates(format!("X: {world_x:.3}   Y: {world_y:.3}").into());
+        let text = if settings.local_offset_enabled {
+            format!(
+                "Локальные: X: {:.3}   Y: {:.3}\nГлобальные: X: {world_x:.3}   Y: {world_y:.3}",
+                world_x - settings.local_offset_x,
+                world_y - settings.local_offset_y,
+            )
+        } else {
+            format!("Глобальные: X: {world_x:.3}   Y: {world_y:.3}")
+        };
+        window.set_cursor_coordinates(text.into());
     });
 
     // Save settings handler

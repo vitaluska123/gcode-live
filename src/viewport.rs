@@ -26,10 +26,6 @@ impl Viewport {
         self.pan_x += delta_x;
         self.pan_y += delta_y;
     }
-
-    pub fn reset(&mut self) {
-        *self = Self::default();
-    }
 }
 
 #[cfg(test)]
@@ -37,14 +33,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn zoom_and_pan_are_bounded_and_resettable() {
+    fn zoom_and_pan_are_bounded() {
         let mut viewport = Viewport::default();
         viewport.zoom_by(1);
         viewport.pan_by(12.0, -8.0);
         assert_eq!(viewport.zoom, 1.25);
         assert_eq!((viewport.pan_x, viewport.pan_y), (12.0, -8.0));
-        viewport.reset();
-        assert_eq!(viewport.zoom, 1.0);
-        assert_eq!((viewport.pan_x, viewport.pan_y), (0.0, 0.0));
     }
 }

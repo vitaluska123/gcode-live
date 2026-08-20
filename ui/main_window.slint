@@ -212,7 +212,7 @@ export component MainWindow inherits Window {
             // =================================================
 
             GroupBox {
-                title: "File Information";
+                title: "Сведения о файле";
 
                 VerticalLayout {
                     padding: 8px;
@@ -220,14 +220,14 @@ export component MainWindow inherits Window {
 
 
                     Text {
-                        text: "Board Dimensions";
+                        text: "Размеры платы";
                         font-weight: 600;
                     }
 
 
                     HorizontalLayout {
                         Text {
-                            text: "Width:";
+                            text: "Ширина:";
                         }
 
                         Text {
@@ -240,7 +240,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Height:";
+                            text: "Высота:";
                         }
 
                         Text {
@@ -252,14 +252,14 @@ export component MainWindow inherits Window {
 
 
                     Text {
-                        text: "Board Bounds";
+                        text: "Границы платы";
                         font-weight: 600;
                     }
 
 
                     HorizontalLayout {
                         Text {
-                            text: "X Min:";
+                            text: "Мин. X:";
                         }
 
                         Text {
@@ -272,7 +272,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "X Max:";
+                            text: "Макс. X:";
                         }
 
                         Text {
@@ -285,7 +285,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Y Min:";
+                            text: "Мин. Y:";
                         }
 
                         Text {
@@ -298,7 +298,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Y Max:";
+                            text: "Макс. Y:";
                         }
 
                         Text {
@@ -310,14 +310,14 @@ export component MainWindow inherits Window {
 
 
                     Text {
-                        text: "Frame Dimensions";
+                        text: "Размеры рамки";
                         font-weight: 600;
                     }
 
 
                     HorizontalLayout {
                         Text {
-                            text: "Width:";
+                            text: "Ширина:";
                         }
 
                         Text {
@@ -330,7 +330,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Height:";
+                            text: "Высота:";
                         }
 
                         Text {
@@ -442,10 +442,9 @@ export component MainWindow inherits Window {
                 }
             }
             if (root.active_tab == 0) : HorizontalLayout {
-                Button { text: "−"; clicked => { root.zoom_preview(-1); } }
-                Button { text: "Fit"; clicked => { root.fit_preview(); } }
-                Button { text: "+"; clicked => { root.zoom_preview(1); } }
-                Text { text: root.cursor_coordinates; color: #aaaaaa; }
+                Button { text: "Фокусировка на области"; preferred-width: 220px; clicked => { root.fit_preview(); } }
+                Rectangle { horizontal-stretch: 1; }
+                Text { text: root.cursor_coordinates; color: #aaaaaa; horizontal-alignment: right; }
             }
 }
         }
