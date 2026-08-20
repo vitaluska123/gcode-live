@@ -589,6 +589,18 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             height as f32,
             pan,
         );
+        if settings.local_offset_enabled {
+            preview_renderer::local_axes(
+                &mut buffer,
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                pan,
+                shift_x,
+                shift_y,
+            );
+        }
 
         // Draw board (blue) - thicker lines
 

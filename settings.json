@@ -1,7 +1,12 @@
 {
   "offset_x": 4.77,
   "offset_y": 4.79,
+  "local_offset_enabled": false,
+  "local_offset_x": -10.0,
+  "local_offset_y": 20.0,
+  "material_width": 150.0,
+  "material_height": 150.0,
   "tab_width": 3.0,
-  "minimum_tabs": 4,
+  "minimum_tabs": 3,
   "maximum_tab_gap": 20.0
 }

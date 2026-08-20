@@ -115,17 +115,77 @@ pub fn axes(
     height: f32,
     pan: (f64, f64),
 ) {
-    let (origin_x, origin_y) = preview.world_to_screen(0.0, 0.0, scale, width, height);
-    let (x_axis_end, _) = preview.world_to_screen(1.0, 0.0, scale, width, height);
-    let (_, y_axis_end) = preview.world_to_screen(0.0, 1.0, scale, width, height);
+    axes_at(buffer, preview, scale, width, height, pan, 0.0, 0.0, 1.0);
+}
+
+/// Draw the local coordinate plane at its global origin. Half opacity keeps it
+/// visually distinct from the machine/global axes.
+pub fn local_axes(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    preview: &PreviewData,
+    scale: f64,
+    width: f32,
+    height: f32,
+    pan: (f64, f64),
+    origin_x_world: f64,
+    origin_y_world: f64,
+) {
+    axes_at(
+        buffer,
+        preview,
+        scale,
+        width,
+        height,
+        pan,
+        origin_x_world,
+        origin_y_world,
+        0.5,
+    );
+}
+
+fn axes_at(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    preview: &PreviewData,
+    scale: f64,
+    width: f32,
+    height: f32,
+    pan: (f64, f64),
+    origin_x_world: f64,
+    origin_y_world: f64,
+    opacity: f32,
+) {
+    let (origin_x, origin_y) =
+        preview.world_to_screen(origin_x_world, origin_y_world, scale, width, height);
+    let (x_axis_end, _) =
+        preview.world_to_screen(origin_x_world + 1.0, origin_y_world, scale, width, height);
+    let (_, y_axis_end) =
+        preview.world_to_screen(origin_x_world, origin_y_world + 1.0, scale, width, height);
     let x_direction = (x_axis_end - origin_x).signum();
     let y_direction = (y_axis_end - origin_y).signum();
     let origin_x = origin_x + pan.0 as f32;
     let origin_y = origin_y + pan.1 as f32;
-    line(buffer, 0.0, origin_y, width, origin_y, (220, 70, 70), 2);
-    line(buffer, origin_x, 0.0, origin_x, height, (70, 210, 120), 2);
+    line_alpha(
+        buffer,
+        0.0,
+        origin_y,
+        width,
+        origin_y,
+        (220, 70, 70),
+        2,
+        opacity,
+    );
+    line_alpha(
+        buffer,
+        origin_x,
+        0.0,
+        origin_x,
+        height,
+        (70, 210, 120),
+        2,
+        opacity,
+    );
     // Arrow tips make the positive direction unambiguous.
-    line(
+    line_alpha(
         buffer,
         width - 10.0 * x_direction,
         origin_y - 5.0,
@@ -133,8 +193,9 @@ pub fn axes(
         origin_y,
         (220, 70, 70),
         2,
+        opacity,
     );
-    line(
+    line_alpha(
         buffer,
         origin_x - 5.0,
         10.0 * y_direction,
@@ -142,6 +203,7 @@ pub fn axes(
         0.0,
         (70, 210, 120),
         2,
+        opacity,
     );
 }
 
@@ -190,7 +252,7 @@ pub fn dotted_rectangle(
         for segment in (0..segments).step_by(2) {
             let t1 = segment as f32 / segments as f32;
             let t2 = ((segment + 1).min(segments)) as f32 / segments as f32;
-            line(
+            line_alpha(
                 buffer,
                 x1 + dx * t1 + pan.0 as f32,
                 y1 + dy * t1 + pan.1 as f32,
@@ -198,6 +260,7 @@ pub fn dotted_rectangle(
                 y1 + dy * t2 + pan.1 as f32,
                 (255, 210, 0),
                 2,
+                0.3,
             );
         }
     }
@@ -227,6 +290,19 @@ fn line(
     color: (u8, u8, u8),
     thickness: i32,
 ) {
+    line_alpha(buffer, x0, y0, x1, y1, color, thickness, 1.0);
+}
+
+fn line_alpha(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    color: (u8, u8, u8),
+    thickness: i32,
+    opacity: f32,
+) {
     let buffer_width = buffer.width() as i32;
     let buffer_height = buffer.height() as i32;
     let pixels = buffer.make_mut_slice();
@@ -241,8 +317,15 @@ fn line(
         let mut error = dx + dy;
         loop {
             if x >= 0 && y >= 0 && x < buffer_width && y < buffer_height {
-                pixels[(y * buffer_width + x) as usize] =
-                    slint::Rgb8Pixel::new(color.0, color.1, color.2);
+                let previous = pixels[(y * buffer_width + x) as usize];
+                let blend = |source: u8, destination: u8| {
+                    (source as f32 * opacity + destination as f32 * (1.0 - opacity)).round() as u8
+                };
+                pixels[(y * buffer_width + x) as usize] = slint::Rgb8Pixel::new(
+                    blend(color.0, previous.r),
+                    blend(color.1, previous.g),
+                    blend(color.2, previous.b),
+                );
             }
             if x == end_x && y == end_y {
                 break;
