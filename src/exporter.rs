@@ -64,9 +64,15 @@ pub fn generate_frame_gcode(
             let (to_x, to_y) = segment[1];
             if (from_y - frame.top).abs() < f64::EPSILON && (to_y - frame.top).abs() < f64::EPSILON
             {
-                append_top_edge_with_tabs(
-                    &mut gcode, from_x, to_x, frame.top, depth, &top_tabs, shift_x, shift_y,
-                );
+                if settings.score_tabs && depth <= cut_depth / 2.0 + f64::EPSILON {
+                    // Score tab locations during the shallow passes, then leave
+                    // their lower half intact to keep the board attached.
+                    gcode.push_str(&format!("X{:.3} Y{:.3}\n", to_x + shift_x, to_y + shift_y));
+                } else {
+                    append_top_edge_with_tabs(
+                        &mut gcode, from_x, to_x, frame.top, depth, &top_tabs, shift_x, shift_y,
+                    );
+                }
             } else {
                 // G1 stays modal after the plunge: ordinary moves need only
                 // coordinates, just like CAM-generated TAP programs.
@@ -283,5 +289,27 @@ mod tests {
         assert!(gcode.contains("G0 X25.000 Y30.000"));
         assert!(gcode.contains("X35.000 Y30.000"));
         assert!(gcode.contains("G0 X26.000 Y32.000"));
+    }
+
+    #[test]
+    fn scored_tabs_are_cut_only_during_the_first_half_of_depth() {
+        let frame = FrameGeometry {
+            left: 0.0,
+            right: 20.0,
+            bottom: 0.0,
+            top: 10.0,
+        };
+        let settings = Settings {
+            score_tabs: true,
+            tool_diameter: 0.0,
+            cut_depth: 1.0,
+            step_depth: 0.5,
+            tab_width: 3.0,
+            minimum_tabs: 3,
+            ..Settings::default()
+        };
+        let gcode = generate_frame_gcode(&BoardBounds::default(), &frame, &settings, None);
+        // Tabs are skipped only on the full-depth pass: 3 holding tabs, one lift each.
+        assert_eq!(gcode.matches("G0 Z2\n").count(), 3);
     }
 }

@@ -25,6 +25,9 @@ pub struct Settings {
     pub minimum_tabs: usize,
     /// Maximum allowed free distance between tabs and the frame ends (mm).
     pub maximum_tab_gap: f64,
+    /// Cut tab locations to half depth before leaving them as holding tabs.
+    #[serde(default)]
+    pub score_tabs: bool,
     /// Tool diameter for calculating toolpath offset (mm)
     #[serde(skip_serializing, default = "default_tool_diameter")]
     pub tool_diameter: f64,
@@ -55,6 +58,7 @@ impl Default for Settings {
             tab_width: 3.0,
             minimum_tabs: 3,
             maximum_tab_gap: 20.0,
+            score_tabs: false,
             tool_diameter: 3.175,
             cut_depth: 1.6,
             step_depth: 0.4,

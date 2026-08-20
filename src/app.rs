@@ -22,6 +22,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     ui_settings.set_tab_width(settings.tab_width as f32);
     ui_settings.set_minimum_tabs(settings.minimum_tabs as f32);
     ui_settings.set_maximum_tab_gap(settings.maximum_tab_gap as f32);
+    ui_settings.set_score_tabs(settings.score_tabs);
     ui_settings.set_local_offset_enabled(settings.local_offset_enabled);
     ui_settings.set_local_offset_x(settings.local_offset_x as f32);
     ui_settings.set_local_offset_y(settings.local_offset_y as f32);
@@ -60,6 +61,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             tab_width: ui_settings.get_tab_width() as f64,
             minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
             maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
+            score_tabs: ui_settings.get_score_tabs(),
             local_offset_enabled: ui_settings.get_local_offset_enabled(),
             local_offset_x: ui_settings.get_local_offset_x() as f64,
             local_offset_y: ui_settings.get_local_offset_y() as f64,
@@ -538,6 +540,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             tab_width: ui_settings.get_tab_width() as f64,
             minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
             maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
+            score_tabs: ui_settings.get_score_tabs(),
             local_offset_enabled: ui_settings.get_local_offset_enabled(),
             local_offset_x: ui_settings.get_local_offset_x() as f64,
             local_offset_y: ui_settings.get_local_offset_y() as f64,
