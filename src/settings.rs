@@ -3,10 +3,22 @@ use serde::{Deserialize, Serialize};
 /// Application settings loaded from settings.json
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    /// Offset from machine origin in X direction (mm)
+    /// Clearance around the source board in X direction (mm).
     pub offset_x: f64,
-    /// Offset from machine origin in Y direction (mm)
+    /// Clearance around the source board in Y direction (mm).
     pub offset_y: f64,
+    /// Place the local source coordinate system at this global position.
+    #[serde(default)]
+    pub local_offset_enabled: bool,
+    #[serde(default)]
+    pub local_offset_x: f64,
+    #[serde(default)]
+    pub local_offset_y: f64,
+    /// Dimensions of the stock sheet in the global coordinate system.
+    #[serde(default = "default_material_width")]
+    pub material_width: f64,
+    #[serde(default = "default_material_height")]
+    pub material_height: f64,
     /// Width of an uncut holding tab on the upper frame edge (mm).
     pub tab_width: f64,
     /// Minimum number of holding tabs.
@@ -35,6 +47,11 @@ impl Default for Settings {
         Self {
             offset_x: 10.0,
             offset_y: 10.0,
+            local_offset_enabled: false,
+            local_offset_x: 0.0,
+            local_offset_y: 0.0,
+            material_width: 150.0,
+            material_height: 150.0,
             tab_width: 3.0,
             minimum_tabs: 3,
             maximum_tab_gap: 20.0,
@@ -58,11 +75,11 @@ impl Settings {
             return Ok(default);
         }
 
-        let content = std::fs::read_to_string(&path)
-            .map_err(|e| SettingsError::ReadError(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(&path).map_err(|e| SettingsError::ReadError(e.to_string()))?;
 
-        let settings: Self = serde_json::from_str(&content)
-            .map_err(|e| SettingsError::ParseError(e.to_string()))?;
+        let settings: Self =
+            serde_json::from_str(&content).map_err(|e| SettingsError::ParseError(e.to_string()))?;
 
         Ok(settings)
     }
@@ -74,6 +91,10 @@ impl Settings {
         let saved = Self {
             offset_x: round_two(self.offset_x),
             offset_y: round_two(self.offset_y),
+            local_offset_x: round_two(self.local_offset_x),
+            local_offset_y: round_two(self.local_offset_y),
+            material_width: round_two(self.material_width),
+            material_height: round_two(self.material_height),
             tab_width: round_two(self.tab_width),
             minimum_tabs: self.minimum_tabs,
             maximum_tab_gap: round_two(self.maximum_tab_gap),
@@ -82,20 +103,46 @@ impl Settings {
         let content = serde_json::to_string_pretty(&saved)
             .map_err(|e| SettingsError::SerializeError(e.to_string()))?;
 
-        std::fs::write(&path, content)
-            .map_err(|e| SettingsError::WriteError(e.to_string()))?;
+        std::fs::write(&path, content).map_err(|e| SettingsError::WriteError(e.to_string()))?;
 
         Ok(())
     }
-
 }
 
-fn round_two(value: f64) -> f64 { (value * 100.0).round() / 100.0 }
-fn default_tool_diameter() -> f64 { 3.175 }
-fn default_cut_depth() -> f64 { 1.6 }
-fn default_step_depth() -> f64 { 0.4 }
-fn default_feed_rate() -> f64 { 120.0 }
-fn default_spindle_speed() -> f64 { 800.0 }
+fn round_two(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
+fn default_tool_diameter() -> f64 {
+    3.175
+}
+fn default_cut_depth() -> f64 {
+    1.6
+}
+fn default_step_depth() -> f64 {
+    0.4
+}
+fn default_feed_rate() -> f64 {
+    120.0
+}
+fn default_spindle_speed() -> f64 {
+    800.0
+}
+fn default_material_width() -> f64 {
+    150.0
+}
+fn default_material_height() -> f64 {
+    150.0
+}
+
+impl Settings {
+    pub fn local_offset(&self) -> (f64, f64) {
+        if self.local_offset_enabled {
+            (self.local_offset_x, self.local_offset_y)
+        } else {
+            (0.0, 0.0)
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum SettingsError {

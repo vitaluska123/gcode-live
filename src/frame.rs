@@ -37,8 +37,10 @@ impl BoardBounds {
 
     /// Check if any points were recorded
     pub fn is_valid(&self) -> bool {
-        self.x_min.is_finite() && self.x_max.is_finite()
-            && self.y_min.is_finite() && self.y_max.is_finite()
+        self.x_min.is_finite()
+            && self.x_max.is_finite()
+            && self.y_min.is_finite()
+            && self.y_max.is_finite()
     }
 
     /// Calculate board width
@@ -64,7 +66,9 @@ pub struct FrameGeometry {
 impl FrameGeometry {
     /// Symmetric reference frame: offsets are applied around all board sides.
     pub fn expanded(bounds: &BoardBounds, settings: &Settings) -> Option<Self> {
-        if !bounds.is_valid() { return None; }
+        if !bounds.is_valid() {
+            return None;
+        }
         let offset_x = settings.offset_x.max(0.0);
         let offset_y = settings.offset_y.max(0.0);
         Some(Self {
@@ -108,7 +112,6 @@ impl FrameGeometry {
     pub fn height(&self) -> f64 {
         self.top - self.bottom
     }
-
 }
 
 /// Uncut intervals along the straight part of the generated frame's upper edge.
@@ -152,7 +155,9 @@ pub fn apply_source_cutting_parameters(content: &str, settings: &mut Settings) {
 
     for raw_line in content.lines() {
         let words = gcode_words(&strip_comments(raw_line));
-        let line_is_g1 = words.iter().any(|&(letter, value)| letter == 'G' && value == 1.0);
+        let line_is_g1 = words
+            .iter()
+            .any(|&(letter, value)| letter == 'G' && value == 1.0);
         for &(letter, value) in &words {
             match letter {
                 'G' if value == 1.0 => cutting_motion = true,
@@ -171,11 +176,14 @@ pub fn apply_source_cutting_parameters(content: &str, settings: &mut Settings) {
         settings.cut_depth = deepest;
     }
     if depths.len() >= 2 {
-        let step = depths.windows(2)
+        let step = depths
+            .windows(2)
             .map(|pair| pair[1] - pair[0])
             .filter(|value| *value > 0.000_001)
             .min_by(|left, right| left.total_cmp(right));
-        if let Some(step) = step { settings.step_depth = step; }
+        if let Some(step) = step {
+            settings.step_depth = step;
+        }
     } else if let Some(&depth) = depths.first() {
         settings.step_depth = depth;
     }
@@ -193,7 +201,6 @@ pub fn parse_gcode_bounds(content: &str) -> BoardBounds {
         let mut has_coordinate = false;
 
         for (letter, value) in gcode_words(&line) {
-
             match letter {
                 'G' if value == 1.0 => cutting_motion = true,
                 'G' => cutting_motion = false,
@@ -227,9 +234,10 @@ pub fn parse_gcode_home_position(content: &str) -> Option<(f64, f64)> {
 
     for raw_line in content.lines() {
         let words = gcode_words(&strip_comments(raw_line));
-        if words.iter().any(|&(letter, value)| {
-            letter == 'M' && (value == 5.0 || value == 30.0)
-        }) {
+        if words
+            .iter()
+            .any(|&(letter, value)| letter == 'M' && (value == 5.0 || value == 30.0))
+        {
             break;
         }
 
@@ -257,13 +265,21 @@ pub fn parse_gcode_toolpath(content: &str) -> Vec<(f64, f64)> {
             match letter {
                 'G' if value == 1.0 => cutting = true,
                 'G' => cutting = false,
-                'X' => { x = Some(value); changed = true; }
-                'Y' => { y = Some(value); changed = true; }
+                'X' => {
+                    x = Some(value);
+                    changed = true;
+                }
+                'Y' => {
+                    y = Some(value);
+                    changed = true;
+                }
                 _ => {}
             }
         }
         if cutting && changed {
-            if let (Some(x), Some(y)) = (x, y) { points.push((x, y)); }
+            if let (Some(x), Some(y)) = (x, y) {
+                points.push((x, y));
+            }
         }
     }
     points
@@ -281,13 +297,21 @@ pub fn parse_gcode_rapid_path(content: &str) -> Vec<(f64, f64)> {
             match letter {
                 'G' if value == 0.0 => rapid = true,
                 'G' => rapid = false,
-                'X' => { x = Some(value); changed = true; }
-                'Y' => { y = Some(value); changed = true; }
+                'X' => {
+                    x = Some(value);
+                    changed = true;
+                }
+                'Y' => {
+                    y = Some(value);
+                    changed = true;
+                }
                 _ => {}
             }
         }
         if rapid && changed {
-            if let (Some(x), Some(y)) = (x, y) { points.push((x, y)); }
+            if let (Some(x), Some(y)) = (x, y) {
+                points.push((x, y));
+            }
         }
     }
     points
@@ -372,8 +396,18 @@ mod tests {
 
     #[test]
     fn frame_expands_board_bounds_by_offsets_and_margin() {
-        let bounds = BoardBounds { x_min: -5.0, x_max: 15.0, y_min: 2.0, y_max: 12.0 };
-        let settings = Settings { offset_x: 1.0, offset_y: 2.0, tool_diameter: 2.0, ..Settings::default() };
+        let bounds = BoardBounds {
+            x_min: -5.0,
+            x_max: 15.0,
+            y_min: 2.0,
+            y_max: 12.0,
+        };
+        let settings = Settings {
+            offset_x: 1.0,
+            offset_y: 2.0,
+            tool_diameter: 2.0,
+            ..Settings::default()
+        };
         let frame = FrameGeometry::calculate(&bounds, &settings).expect("valid bounds");
 
         assert_eq!(frame.left, -7.0);
@@ -392,8 +426,18 @@ mod tests {
 
     #[test]
     fn top_tabs_keep_gaps_within_configured_limit() {
-        let frame = FrameGeometry { left: 0.0, right: 100.0, bottom: 0.0, top: 40.0 };
-        let settings = Settings { tab_width: 3.0, minimum_tabs: 3, maximum_tab_gap: 20.0, ..Settings::default() };
+        let frame = FrameGeometry {
+            left: 0.0,
+            right: 100.0,
+            bottom: 0.0,
+            top: 40.0,
+        };
+        let settings = Settings {
+            tab_width: 3.0,
+            minimum_tabs: 3,
+            maximum_tab_gap: 20.0,
+            ..Settings::default()
+        };
         let tabs = top_tab_intervals(&frame, 1.0, &settings);
         assert_eq!(tabs.len(), 4);
         assert!((tabs[0].0 - 1.0) < 20.0);

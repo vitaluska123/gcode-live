@@ -1,4 +1,3 @@
-
 /// Preview data for rendering board and frame
 #[derive(Debug, Clone)]
 pub struct PreviewData {
@@ -12,6 +11,8 @@ pub struct PreviewData {
     pub frame_right: f64,
     pub frame_bottom: f64,
     pub frame_top: f64,
+    pub material_width: f64,
+    pub material_height: f64,
     /// Whether we have valid data to display
     pub has_data: bool,
 }
@@ -27,14 +28,15 @@ impl Default for PreviewData {
             frame_right: 0.0,
             frame_bottom: 0.0,
             frame_top: 0.0,
+            material_width: 0.0,
+            material_height: 0.0,
             has_data: false,
         }
     }
 }
 
 impl PreviewData {
-    /// Create preview data from board bounds and frame geometry
-    pub fn from_bounds(
+    pub fn from_bounds_with_material(
         board_x_min: f64,
         board_x_max: f64,
         board_y_min: f64,
@@ -43,6 +45,8 @@ impl PreviewData {
         frame_right: f64,
         frame_bottom: f64,
         frame_top: f64,
+        material_width: f64,
+        material_height: f64,
     ) -> Self {
         Self {
             board_x_min,
@@ -53,8 +57,23 @@ impl PreviewData {
             frame_right,
             frame_bottom,
             frame_top,
+            material_width: material_width.max(0.0),
+            material_height: material_height.max(0.0),
             has_data: true,
         }
+    }
+
+    pub fn world_bounds(&self) -> (f64, f64, f64, f64) {
+        (
+            self.board_x_min
+                .min(self.frame_left)
+                .min(-self.material_width),
+            self.board_x_max.max(self.frame_right).max(0.0),
+            self.board_y_min.min(self.frame_bottom).min(0.0),
+            self.board_y_max
+                .max(self.frame_top)
+                .max(self.material_height),
+        )
     }
 
     /// Calculate scaling factor to fit content in widget
@@ -64,10 +83,7 @@ impl PreviewData {
         }
 
         // Find overall bounds including both board and frame
-        let all_x_min = self.board_x_min.min(self.frame_left);
-        let all_x_max = self.board_x_max.max(self.frame_right);
-        let all_y_min = self.board_y_min.min(self.frame_bottom);
-        let all_y_max = self.board_y_max.max(self.frame_top);
+        let (all_x_min, all_x_max, all_y_min, all_y_max) = self.world_bounds();
 
         let content_width = (all_x_max - all_x_min).abs();
         let content_height = all_y_max - all_y_min;
@@ -96,10 +112,7 @@ impl PreviewData {
         widget_height: f32,
     ) -> (f32, f32) {
         // Find overall bounds for centering
-        let all_x_min = self.board_x_min.min(self.frame_left);
-        let all_x_max = self.board_x_max.max(self.frame_right);
-        let all_y_min = self.board_y_min.min(self.frame_bottom);
-        let all_y_max = self.board_y_max.max(self.frame_top);
+        let (all_x_min, all_x_max, all_y_min, all_y_max) = self.world_bounds();
 
         let content_width = all_x_max - all_x_min;
         let content_height = all_y_max - all_y_min;
@@ -107,13 +120,12 @@ impl PreviewData {
         let content_screen_height = content_height * scale;
 
         // Keep both axes centered, then flip Y for screen coordinates.
-        let sx = ((widget_width as f64 - content_screen_width) / 2.0
-            + (x - all_x_min) * scale) as f32;
+        let sx =
+            ((widget_width as f64 - content_screen_width) / 2.0 + (x - all_x_min) * scale) as f32;
         // Flip Y axis for screen coordinates (screen Y goes down)
-        let sy = ((widget_height as f64 + content_screen_height) / 2.0
-            - (y - all_y_min) * scale) as f32;
+        let sy =
+            ((widget_height as f64 + content_screen_height) / 2.0 - (y - all_y_min) * scale) as f32;
 
         (sx, sy)
     }
-
 }

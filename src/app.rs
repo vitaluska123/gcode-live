@@ -1,12 +1,11 @@
 use slint::{ComponentHandle, SharedPixelBuffer};
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
-use crate::{exporter, frame, preview, preview_renderer, settings, MainWindow, UiSettings};
 use crate::viewport::Viewport;
+use crate::{exporter, frame, preview, preview_renderer, settings, MainWindow, UiSettings};
 
 pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
-
     // Load settings
     let settings = match settings::Settings::load() {
         Ok(s) => s,
@@ -23,6 +22,11 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     ui_settings.set_tab_width(settings.tab_width as f32);
     ui_settings.set_minimum_tabs(settings.minimum_tabs as f32);
     ui_settings.set_maximum_tab_gap(settings.maximum_tab_gap as f32);
+    ui_settings.set_local_offset_enabled(settings.local_offset_enabled);
+    ui_settings.set_local_offset_x(settings.local_offset_x as f32);
+    ui_settings.set_local_offset_y(settings.local_offset_y as f32);
+    ui_settings.set_material_width(settings.material_width as f32);
+    ui_settings.set_material_height(settings.material_height as f32);
 
     // State management
     let board_bounds = Rc::new(RefCell::new(None));
@@ -40,8 +44,12 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
     main_window.on_sync_settings(move || {
-        let Some(window) = window_weak.upgrade() else { return; };
-        let Some(settings_rc) = weak_settings.upgrade() else { return; };
+        let Some(window) = window_weak.upgrade() else {
+            return;
+        };
+        let Some(settings_rc) = weak_settings.upgrade() else {
+            return;
+        };
 
         let ui_settings = window.global::<UiSettings>();
         let source_settings = settings_rc.borrow().clone();
@@ -51,13 +59,22 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             tab_width: ui_settings.get_tab_width() as f64,
             minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
             maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
+            local_offset_enabled: ui_settings.get_local_offset_enabled(),
+            local_offset_x: ui_settings.get_local_offset_x() as f64,
+            local_offset_y: ui_settings.get_local_offset_y() as f64,
+            material_width: ui_settings.get_material_width() as f64,
+            material_height: ui_settings.get_material_height() as f64,
             ..source_settings
         };
 
         *settings_rc.borrow_mut() = new_settings.clone();
 
-        let Some(board_rc) = weak_board.upgrade() else { return; };
-        let Some(frame_rc) = weak_frame.upgrade() else { return; };
+        let Some(board_rc) = weak_board.upgrade() else {
+            return;
+        };
+        let Some(frame_rc) = weak_frame.upgrade() else {
+            return;
+        };
         let bounds = board_rc.borrow().clone();
         if let Some(bounds) = bounds {
             if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
@@ -78,13 +95,27 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let window_weak = main_window.as_weak();
 
     main_window.on_open_tap_file(move || {
-        let Some(window) = window_weak.upgrade() else { return; };
-        let Some(board_rc) = weak_board.upgrade() else { return; };
-        let Some(frame_rc) = weak_frame.upgrade() else { return; };
-        let Some(settings_rc) = weak_settings.upgrade() else { return; };
-        let Some(home_rc) = weak_home.upgrade() else { return; };
-        let Some(path_rc) = weak_toolpath.upgrade() else { return; };
-        let Some(rapid_rc) = weak_rapid_path.upgrade() else { return; };
+        let Some(window) = window_weak.upgrade() else {
+            return;
+        };
+        let Some(board_rc) = weak_board.upgrade() else {
+            return;
+        };
+        let Some(frame_rc) = weak_frame.upgrade() else {
+            return;
+        };
+        let Some(settings_rc) = weak_settings.upgrade() else {
+            return;
+        };
+        let Some(home_rc) = weak_home.upgrade() else {
+            return;
+        };
+        let Some(path_rc) = weak_toolpath.upgrade() else {
+            return;
+        };
+        let Some(rapid_rc) = weak_rapid_path.upgrade() else {
+            return;
+        };
 
         let Some(file_path) = rfd::FileDialog::new()
             .add_filter("TAP Files", &["tap", "nc", "gcode", "ngc"])
@@ -143,12 +174,9 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         *path_rc.borrow_mut() = path;
         *rapid_rc.borrow_mut() = rapid;
         window.set_source_gcode(content.clone().into());
-        window.set_final_gcode(exporter::generate_frame_gcode(
-            &bounds,
-            &frame,
-            &settings_rc.borrow(),
-            home,
-        ).into());
+        window.set_final_gcode(
+            exporter::generate_frame_gcode(&bounds, &frame, &settings_rc.borrow(), home).into(),
+        );
 
         // Trigger preview update
         window.invoke_update_preview();
@@ -164,14 +192,31 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let weak_rapid_path = Rc::downgrade(&rapid_path);
     let window_weak = main_window.as_weak();
     main_window.on_apply_source_gcode(move || {
-        let (Some(window), Some(board_rc), Some(frame_rc), Some(settings_rc), Some(home_rc), Some(path_rc), Some(rapid_rc)) = (
-            window_weak.upgrade(), weak_board.upgrade(), weak_frame.upgrade(), weak_settings.upgrade(),
-            weak_home.upgrade(), weak_toolpath.upgrade(), weak_rapid_path.upgrade(),
-        ) else { return; };
+        let (
+            Some(window),
+            Some(board_rc),
+            Some(frame_rc),
+            Some(settings_rc),
+            Some(home_rc),
+            Some(path_rc),
+            Some(rapid_rc),
+        ) = (
+            window_weak.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_settings.upgrade(),
+            weak_home.upgrade(),
+            weak_toolpath.upgrade(),
+            weak_rapid_path.upgrade(),
+        )
+        else {
+            return;
+        };
         let content = window.get_source_gcode().to_string();
         let bounds = frame::parse_gcode_bounds(&content);
         if !bounds.is_valid() {
-            window.invoke_show_error("В исходном G-code не найдена корректная траектория G1.".into());
+            window
+                .invoke_show_error("В исходном G-code не найдена корректная траектория G1.".into());
             return;
         }
         let home = frame::parse_gcode_home_position(&content);
@@ -199,7 +244,9 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         *home_rc.borrow_mut() = home;
         *path_rc.borrow_mut() = path;
         *rapid_rc.borrow_mut() = rapid;
-        window.set_final_gcode(exporter::generate_frame_gcode(&bounds, &generated_frame, &settings, home).into());
+        window.set_final_gcode(
+            exporter::generate_frame_gcode(&bounds, &generated_frame, &settings, home).into(),
+        );
         window.invoke_update_preview();
     });
 
@@ -210,8 +257,12 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let window_weak = main_window.as_weak();
     main_window.on_apply_final_gcode(move || {
         let (Some(window), Some(path_rc), Some(rapid_rc)) = (
-            window_weak.upgrade(), weak_toolpath.upgrade(), weak_rapid_path.upgrade(),
-        ) else { return; };
+            window_weak.upgrade(),
+            weak_toolpath.upgrade(),
+            weak_rapid_path.upgrade(),
+        ) else {
+            return;
+        };
         let content = window.get_final_gcode().to_string();
         let path = frame::parse_gcode_toolpath(&content);
         if path.is_empty() {
@@ -229,26 +280,36 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         {
             viewport_state.borrow_mut().zoom_by(direction);
         }
-        if let Some(window) = window_weak.upgrade() { window.invoke_update_preview(); }
+        if let Some(window) = window_weak.upgrade() {
+            window.invoke_update_preview();
+        }
     });
     let viewport_state = viewport.clone();
     let window_weak = main_window.as_weak();
     main_window.on_fit_preview(move || {
         viewport_state.borrow_mut().reset();
-        if let Some(window) = window_weak.upgrade() { window.invoke_update_preview(); }
+        if let Some(window) = window_weak.upgrade() {
+            window.invoke_update_preview();
+        }
     });
     let pointer_state = pointer_position.clone();
-    main_window.on_begin_pan(move |x, y| { *pointer_state.borrow_mut() = Some((x as f64, y as f64)); });
+    main_window.on_begin_pan(move |x, y| {
+        *pointer_state.borrow_mut() = Some((x as f64, y as f64));
+    });
     let pointer_state = pointer_position.clone();
     let viewport_state = viewport.clone();
     let window_weak = main_window.as_weak();
     main_window.on_pan_preview(move |x, y| {
         let current = (x as f64, y as f64);
         if let Some(previous) = *pointer_state.borrow() {
-            viewport_state.borrow_mut().pan_by(current.0 - previous.0, current.1 - previous.1);
+            viewport_state
+                .borrow_mut()
+                .pan_by(current.0 - previous.0, current.1 - previous.1);
         }
         *pointer_state.borrow_mut() = Some(current);
-        if let Some(window) = window_weak.upgrade() { window.invoke_update_preview(); }
+        if let Some(window) = window_weak.upgrade() {
+            window.invoke_update_preview();
+        }
     });
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
@@ -256,30 +317,63 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
     main_window.on_cursor_moved(move |x, y, width, height| {
-        if width <= 0.0 || height <= 0.0 { return; }
+        if width <= 0.0 || height <= 0.0 {
+            return;
+        }
         let (Some(window), Some(board), Some(frame), Some(viewport), Some(settings_rc)) = (
-            window_weak.upgrade(), weak_board.upgrade(), weak_frame.upgrade(), weak_viewport.upgrade(), weak_settings.upgrade(),
-        ) else { return; };
-        let (Some(bounds), Some(frame)) = (board.borrow().as_ref().cloned(), frame.borrow().as_ref().cloned()) else { return; };
+            window_weak.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_viewport.upgrade(),
+            weak_settings.upgrade(),
+        ) else {
+            return;
+        };
+        let (Some(bounds), Some(frame)) = (
+            board.borrow().as_ref().cloned(),
+            frame.borrow().as_ref().cloned(),
+        ) else {
+            return;
+        };
         let settings = settings_rc.borrow().clone();
         let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
-        let preview_left = expanded.as_ref().map_or(frame.left, |value| frame.left.min(value.left));
-        let preview_right = expanded.as_ref().map_or(frame.right, |value| frame.right.max(value.right));
-        let preview_bottom = expanded.as_ref().map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
-        let preview_top = expanded.as_ref().map_or(frame.top, |value| frame.top.max(value.top));
-        let data = preview::PreviewData::from_bounds(
-            bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max,
-            preview_left, preview_right, preview_bottom, preview_top,
+        let preview_left = expanded
+            .as_ref()
+            .map_or(frame.left, |value| frame.left.min(value.left));
+        let preview_right = expanded
+            .as_ref()
+            .map_or(frame.right, |value| frame.right.max(value.right));
+        let preview_bottom = expanded
+            .as_ref()
+            .map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
+        let preview_top = expanded
+            .as_ref()
+            .map_or(frame.top, |value| frame.top.max(value.top));
+        let (shift_x, shift_y) = settings.local_offset();
+        let data = preview::PreviewData::from_bounds_with_material(
+            bounds.x_min + shift_x,
+            bounds.x_max + shift_x,
+            bounds.y_min + shift_y,
+            bounds.y_max + shift_y,
+            preview_left + shift_x,
+            preview_right + shift_x,
+            preview_bottom + shift_y,
+            preview_top + shift_y,
+            settings.material_width,
+            settings.material_height,
         );
         let camera = *viewport.borrow();
         let scale = data.calculate_scale(width, height) * camera.zoom;
-        if scale <= 0.0 { return; }
-        let min_x = data.board_x_min.min(data.frame_left);
-        let min_y = data.board_y_min.min(data.frame_bottom);
-        let content_width = data.board_x_max.max(data.frame_right) - min_x;
-        let content_height = data.board_y_max.max(data.frame_top) - min_y;
-        let world_x = min_x + (x as f64 - (width as f64 - content_width * scale) / 2.0 - camera.pan_x) / scale;
-        let world_y = min_y + ((height as f64 + content_height * scale) / 2.0 + camera.pan_y - y as f64) / scale;
+        if scale <= 0.0 {
+            return;
+        }
+        let (min_x, max_x, min_y, max_y) = data.world_bounds();
+        let content_width = max_x - min_x;
+        let content_height = max_y - min_y;
+        let world_x = min_x
+            + (x as f64 - (width as f64 - content_width * scale) / 2.0 - camera.pan_x) / scale;
+        let world_y = min_y
+            + ((height as f64 + content_height * scale) / 2.0 + camera.pan_y - y as f64) / scale;
         window.set_cursor_coordinates(format!("X: {world_x:.3}   Y: {world_y:.3}").into());
     });
 
@@ -290,11 +384,15 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let window_weak = main_window.as_weak();
 
     main_window.on_save_settings(move || {
-        let Some(window) = window_weak.upgrade() else { return; };
-        let Some(settings_rc) = weak_settings.upgrade() else { return; };
+        let Some(window) = window_weak.upgrade() else {
+            return;
+        };
+        let Some(settings_rc) = weak_settings.upgrade() else {
+            return;
+        };
 
         let ui_settings = window.global::<UiSettings>();
-        
+
         let source_settings = settings_rc.borrow().clone();
         let new_settings = settings::Settings {
             offset_x: ui_settings.get_offset_x() as f64,
@@ -302,6 +400,11 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             tab_width: ui_settings.get_tab_width() as f64,
             minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
             maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
+            local_offset_enabled: ui_settings.get_local_offset_enabled(),
+            local_offset_x: ui_settings.get_local_offset_x() as f64,
+            local_offset_y: ui_settings.get_local_offset_y() as f64,
+            material_width: ui_settings.get_material_width() as f64,
+            material_height: ui_settings.get_material_height() as f64,
             ..source_settings
         };
 
@@ -351,6 +454,25 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return;
         };
 
+        let settings = settings_rc.borrow().clone();
+        let (shift_x, shift_y) = settings.local_offset();
+        let exceeds_material = frame.left + shift_x < -settings.material_width.max(0.0)
+            || frame.bottom + shift_y < 0.0
+            || frame.right + shift_x > 0.0
+            || frame.top + shift_y > settings.material_height.max(0.0);
+        if exceeds_material {
+            let accepted = rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Warning)
+                .set_title("Рамка выходит за текстолит")
+                .set_description(format!(
+                    "Экспортируемая рамка выходит за пределы текстолита {:.1} × {:.1} мм. Продолжить экспорт?",
+                    settings.material_width, settings.material_height
+                ))
+                .set_buttons(rfd::MessageButtons::OkCancel)
+                .show();
+            if !matches!(accepted, rfd::MessageDialogResult::Ok) { return; }
+        }
+
         let Some(file_path) = rfd::FileDialog::new()
             .set_file_name("frame.tap")
             .save_file()
@@ -361,7 +483,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let gcode = exporter::generate_frame_gcode(
             bounds,
             frame,
-            &settings_rc.borrow(),
+            &settings,
             *home_rc.borrow(),
         );
 
@@ -398,10 +520,18 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let Some(frame_rc) = weak_frame.upgrade() else {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
         };
-        let Some(settings_rc) = weak_settings.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
-        let Some(path_rc) = weak_toolpath.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
-        let Some(rapid_rc) = weak_rapid_path.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
-        let Some(viewport_rc) = weak_viewport.upgrade() else { return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height)); };
+        let Some(settings_rc) = weak_settings.upgrade() else {
+            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
+        };
+        let Some(path_rc) = weak_toolpath.upgrade() else {
+            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
+        };
+        let Some(rapid_rc) = weak_rapid_path.upgrade() else {
+            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
+        };
+        let Some(viewport_rc) = weak_viewport.upgrade() else {
+            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
+        };
 
         let mut buffer = SharedPixelBuffer::<slint::Rgb8Pixel>::new(width, height);
 
@@ -420,39 +550,117 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         };
 
         let settings = settings_rc.borrow().clone();
+        let (shift_x, shift_y) = settings.local_offset();
         let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
-        let preview_left = expanded.as_ref().map_or(frame.left, |value| frame.left.min(value.left));
-        let preview_right = expanded.as_ref().map_or(frame.right, |value| frame.right.max(value.right));
-        let preview_bottom = expanded.as_ref().map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
-        let preview_top = expanded.as_ref().map_or(frame.top, |value| frame.top.max(value.top));
-        let preview_data = preview::PreviewData::from_bounds(
-            bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max,
-            preview_left, preview_right, preview_bottom, preview_top,
+        let preview_left = expanded
+            .as_ref()
+            .map_or(frame.left, |value| frame.left.min(value.left));
+        let preview_right = expanded
+            .as_ref()
+            .map_or(frame.right, |value| frame.right.max(value.right));
+        let preview_bottom = expanded
+            .as_ref()
+            .map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
+        let preview_top = expanded
+            .as_ref()
+            .map_or(frame.top, |value| frame.top.max(value.top));
+        let preview_data = preview::PreviewData::from_bounds_with_material(
+            bounds.x_min + shift_x,
+            bounds.x_max + shift_x,
+            bounds.y_min + shift_y,
+            bounds.y_max + shift_y,
+            preview_left + shift_x,
+            preview_right + shift_x,
+            preview_bottom + shift_y,
+            preview_top + shift_y,
+            settings.material_width,
+            settings.material_height,
         );
 
         let viewport = *viewport_rc.borrow();
         let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
         let pan = (viewport.pan_x, viewport.pan_y);
         preview_renderer::draw_grid(&mut buffer, &preview_data, scale, pan);
-        preview_renderer::axes(&mut buffer, &preview_data, scale, width as f32, height as f32, pan);
+        preview_renderer::axes(
+            &mut buffer,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            pan,
+        );
 
         // Draw board (blue) - thicker lines
 
         // Draw frame (red) - thicker lines
         let path = path_rc.borrow();
-        preview_renderer::polyline(&mut buffer, &path, &preview_data, scale, width as f32, height as f32, (0, 210, 255), 2, pan);
+        let shifted_path: Vec<_> = path
+            .iter()
+            .map(|&(x, y)| (x + shift_x, y + shift_y))
+            .collect();
+        preview_renderer::polyline(
+            &mut buffer,
+            &shifted_path,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            (0, 210, 255),
+            2,
+            pan,
+        );
+        let material = [
+            (-settings.material_width, 0.0),
+            (0.0, 0.0),
+            (0.0, settings.material_height),
+            (-settings.material_width, settings.material_height),
+            (-settings.material_width, 0.0),
+        ];
+        preview_renderer::rectangle(
+            &mut buffer,
+            &material,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            (120, 170, 120),
+            pan,
+        );
         if let Some(expanded) = expanded {
             let corners = [
-                (expanded.left, expanded.bottom), (expanded.right, expanded.bottom),
-                (expanded.right, expanded.top), (expanded.left, expanded.top), (expanded.left, expanded.bottom),
+                (expanded.left + shift_x, expanded.bottom + shift_y),
+                (expanded.right + shift_x, expanded.bottom + shift_y),
+                (expanded.right + shift_x, expanded.top + shift_y),
+                (expanded.left + shift_x, expanded.top + shift_y),
+                (expanded.left + shift_x, expanded.bottom + shift_y),
             ];
-            preview_renderer::dotted_rectangle(&mut buffer, &corners, &preview_data, scale, width as f32, height as f32, pan);
+            preview_renderer::dotted_rectangle(
+                &mut buffer,
+                &corners,
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                pan,
+            );
         }
         let anchored_corners = [
-            (frame.left, frame.bottom), (frame.right, frame.bottom),
-            (frame.right, frame.top), (frame.left, frame.top), (frame.left, frame.bottom),
+            (frame.left + shift_x, frame.bottom + shift_y),
+            (frame.right + shift_x, frame.bottom + shift_y),
+            (frame.right + shift_x, frame.top + shift_y),
+            (frame.left + shift_x, frame.top + shift_y),
+            (frame.left + shift_x, frame.bottom + shift_y),
         ];
-        preview_renderer::rectangle(&mut buffer, &anchored_corners, &preview_data, scale, width as f32, height as f32, (255, 70, 100), pan);
+        preview_renderer::rectangle(
+            &mut buffer,
+            &anchored_corners,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            (255, 70, 100),
+            pan,
+        );
         let corner_radius = (settings.tool_diameter / 2.0)
             .min(1.0)
             .min(frame.width() / 4.0)
@@ -461,7 +669,10 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         for (left, right) in frame::top_tab_intervals(frame, corner_radius, &settings) {
             preview_renderer::polyline(
                 &mut buffer,
-                &[(left, frame.top), (right, frame.top)],
+                &[
+                    (left + shift_x, frame.top + shift_y),
+                    (right + shift_x, frame.top + shift_y),
+                ],
                 &preview_data,
                 scale,
                 width as f32,
@@ -472,7 +683,21 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         let rapid = rapid_rc.borrow();
-        preview_renderer::polyline(&mut buffer, &rapid, &preview_data, scale, width as f32, height as f32, (255, 190, 0), 1, pan);
+        let shifted_rapid: Vec<_> = rapid
+            .iter()
+            .map(|&(x, y)| (x + shift_x, y + shift_y))
+            .collect();
+        preview_renderer::polyline(
+            &mut buffer,
+            &shifted_rapid,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            (255, 190, 0),
+            1,
+            pan,
+        );
 
         slint::Image::from_rgb8(buffer)
     });

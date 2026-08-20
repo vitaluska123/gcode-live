@@ -9,6 +9,7 @@ pub fn generate_frame_gcode(
     source_home: Option<(f64, f64)>,
 ) -> String {
     let mut gcode = String::new();
+    let (shift_x, shift_y) = settings.local_offset();
 
     // Header
     gcode.push_str("G21 G17 G90\n");
@@ -28,7 +29,11 @@ pub fn generate_frame_gcode(
 
     // Rapid to the first point of the rounded frame at a safe height.
     gcode.push_str("G0 Z5\n");
-    gcode.push_str(&format!("G0 X{start_x:.3} Y{start_y:.3}\n"));
+    gcode.push_str(&format!(
+        "G0 X{:.3} Y{:.3}\n",
+        start_x + shift_x,
+        start_y + shift_y
+    ));
     gcode.push_str("\n");
 
     // Calculate depth passes
@@ -57,14 +62,15 @@ pub fn generate_frame_gcode(
         for segment in path.windows(2) {
             let (from_x, from_y) = segment[0];
             let (to_x, to_y) = segment[1];
-            if (from_y - frame.top).abs() < f64::EPSILON
-                && (to_y - frame.top).abs() < f64::EPSILON
+            if (from_y - frame.top).abs() < f64::EPSILON && (to_y - frame.top).abs() < f64::EPSILON
             {
-                append_top_edge_with_tabs(&mut gcode, from_x, to_x, frame.top, depth, &top_tabs);
+                append_top_edge_with_tabs(
+                    &mut gcode, from_x, to_x, frame.top, depth, &top_tabs, shift_x, shift_y,
+                );
             } else {
                 // G1 stays modal after the plunge: ordinary moves need only
                 // coordinates, just like CAM-generated TAP programs.
-                gcode.push_str(&format!("X{to_x:.3} Y{to_y:.3}\n"));
+                gcode.push_str(&format!("X{:.3} Y{:.3}\n", to_x + shift_x, to_y + shift_y));
             }
         }
 
@@ -74,7 +80,11 @@ pub fn generate_frame_gcode(
     // Retract and end
     gcode.push_str("G0 Z5\n");
     if let Some((home_x, home_y)) = source_home {
-        gcode.push_str(&format!("G0 X{home_x:.3} Y{home_y:.3}\n"));
+        gcode.push_str(&format!(
+            "G0 X{:.3} Y{:.3}\n",
+            home_x + shift_x,
+            home_y + shift_y
+        ));
     }
     gcode.push_str("M5\n");
     gcode.push_str("M30\n");
@@ -89,27 +99,35 @@ fn append_top_edge_with_tabs(
     y: f64,
     depth: f64,
     tabs: &[(f64, f64)],
+    shift_x: f64,
+    shift_y: f64,
 ) {
     let mut cursor_x = from_x;
     let reverse = to_x < from_x;
     let mut ordered_tabs = tabs.to_vec();
-    if reverse { ordered_tabs.reverse(); }
+    if reverse {
+        ordered_tabs.reverse();
+    }
 
     for &(left, right) in &ordered_tabs {
-        let (entry, exit) = if reverse { (right, left) } else { (left, right) };
+        let (entry, exit) = if reverse {
+            (right, left)
+        } else {
+            (left, right)
+        };
         if (entry - cursor_x).abs() > f64::EPSILON {
-            gcode.push_str(&format!("X{entry:.3} Y{y:.3}\n"));
+            gcode.push_str(&format!("X{:.3} Y{:.3}\n", entry + shift_x, y + shift_y));
         }
         // Match the source TAP pattern: lift above the board, cross the tab,
         // return to the board surface, then resume the current cutting depth.
         gcode.push_str("G0 Z2\n");
-        gcode.push_str(&format!("X{exit:.3} Y{y:.3}\n"));
+        gcode.push_str(&format!("X{:.3} Y{:.3}\n", exit + shift_x, y + shift_y));
         gcode.push_str("Z0\n");
         gcode.push_str(&format!("G1 Z-{depth:.3}\n"));
         cursor_x = exit;
     }
     if (to_x - cursor_x).abs() > f64::EPSILON {
-        gcode.push_str(&format!("X{to_x:.3} Y{y:.3}\n"));
+        gcode.push_str(&format!("X{:.3} Y{:.3}\n", to_x + shift_x, y + shift_y));
     }
 }
 
@@ -128,14 +146,49 @@ fn rounded_rectangle_path(
         ];
     }
 
-    let mut path = vec![(frame.left + radius, frame.bottom), (frame.right - radius, frame.bottom)];
-    append_arc(&mut path, frame.right - radius, frame.bottom + radius, -90.0, 0.0, radius, corner_segments);
+    let mut path = vec![
+        (frame.left + radius, frame.bottom),
+        (frame.right - radius, frame.bottom),
+    ];
+    append_arc(
+        &mut path,
+        frame.right - radius,
+        frame.bottom + radius,
+        -90.0,
+        0.0,
+        radius,
+        corner_segments,
+    );
     path.push((frame.right, frame.top - radius));
-    append_arc(&mut path, frame.right - radius, frame.top - radius, 0.0, 90.0, radius, corner_segments);
+    append_arc(
+        &mut path,
+        frame.right - radius,
+        frame.top - radius,
+        0.0,
+        90.0,
+        radius,
+        corner_segments,
+    );
     path.push((frame.left + radius, frame.top));
-    append_arc(&mut path, frame.left + radius, frame.top - radius, 90.0, 180.0, radius, corner_segments);
+    append_arc(
+        &mut path,
+        frame.left + radius,
+        frame.top - radius,
+        90.0,
+        180.0,
+        radius,
+        corner_segments,
+    );
     path.push((frame.left, frame.bottom + radius));
-    append_arc(&mut path, frame.left + radius, frame.bottom + radius, 180.0, 270.0, radius, corner_segments);
+    append_arc(
+        &mut path,
+        frame.left + radius,
+        frame.bottom + radius,
+        180.0,
+        270.0,
+        radius,
+        corner_segments,
+    );
     path
 }
 
@@ -149,9 +202,13 @@ fn append_arc(
     segments: usize,
 ) {
     for segment in 1..=segments {
-        let angle = (start_degrees + (end_degrees - start_degrees) * segment as f64 / segments as f64)
+        let angle = (start_degrees
+            + (end_degrees - start_degrees) * segment as f64 / segments as f64)
             .to_radians();
-        path.push((center_x + radius * angle.cos(), center_y + radius * angle.sin()));
+        path.push((
+            center_x + radius * angle.cos(),
+            center_y + radius * angle.sin(),
+        ));
     }
 }
 
@@ -172,8 +229,21 @@ mod tests {
 
     #[test]
     fn export_contains_all_depth_passes_and_rounded_corner_points() {
-        let frame = FrameGeometry { left: 0.0, right: 20.0, bottom: 0.0, top: 10.0 };
-        let settings = Settings { cut_depth: 1.0, step_depth: 0.4, tool_diameter: 2.0, tab_width: 3.0, minimum_tabs: 3, maximum_tab_gap: 20.0, ..Settings::default() };
+        let frame = FrameGeometry {
+            left: 0.0,
+            right: 20.0,
+            bottom: 0.0,
+            top: 10.0,
+        };
+        let settings = Settings {
+            cut_depth: 1.0,
+            step_depth: 0.4,
+            tool_diameter: 2.0,
+            tab_width: 3.0,
+            minimum_tabs: 3,
+            maximum_tab_gap: 20.0,
+            ..Settings::default()
+        };
         let gcode = generate_frame_gcode(
             &BoardBounds::default(),
             &frame,
@@ -189,5 +259,29 @@ mod tests {
         assert_eq!(gcode.matches("G0 Z2\n").count(), 9);
         assert_eq!(gcode.matches("Z0\n").count(), 9);
         assert!(!gcode.contains("G1 X"));
+    }
+
+    #[test]
+    fn export_translates_local_program_when_local_zero_is_enabled() {
+        let frame = FrameGeometry {
+            left: 0.0,
+            right: 10.0,
+            bottom: 0.0,
+            top: 5.0,
+        };
+        let settings = Settings {
+            local_offset_enabled: true,
+            local_offset_x: 25.0,
+            local_offset_y: 30.0,
+            tool_diameter: 0.0,
+            cut_depth: 1.0,
+            step_depth: 1.0,
+            ..Settings::default()
+        };
+        let gcode =
+            generate_frame_gcode(&BoardBounds::default(), &frame, &settings, Some((1.0, 2.0)));
+        assert!(gcode.contains("G0 X25.000 Y30.000"));
+        assert!(gcode.contains("X35.000 Y30.000"));
+        assert!(gcode.contains("G0 X26.000 Y32.000"));
     }
 }

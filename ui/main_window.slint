@@ -1,5 +1,5 @@
 
-import { Button, LineEdit, GroupBox, TextEdit } from "std-widgets.slint";
+import { Button, LineEdit, GroupBox, TextEdit, CheckBox } from "std-widgets.slint";
 
 // ============================================================
 // PCB Frame Generator - Main Window UI
@@ -11,6 +11,11 @@ export global UiSettings {
     in-out property<float> tab_width: 3.0;
     in-out property<float> minimum_tabs: 3.0;
     in-out property<float> maximum_tab_gap: 20.0;
+    in-out property<bool> local_offset_enabled: false;
+    in-out property<float> local_offset_x: 0.0;
+    in-out property<float> local_offset_y: 0.0;
+    in-out property<float> material_width: 150.0;
+    in-out property<float> material_height: 150.0;
 }
 
 export component MainWindow inherits Window {
@@ -101,7 +106,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Отступ X (мм):";
+                            text: "Запас рамки X (мм):";
                             vertical-alignment: center;
                         }
 
@@ -119,7 +124,7 @@ export component MainWindow inherits Window {
 
                     HorizontalLayout {
                         Text {
-                            text: "Отступ Y (мм):";
+                            text: "Запас рамки Y (мм):";
                             vertical-alignment: center;
                         }
 
@@ -133,6 +138,30 @@ export component MainWindow inherits Window {
                                 root.update_preview();
                             }
                         }
+                    }
+
+                    Text { text: "Глобальные координаты"; font-weight: 600; }
+                    CheckBox {
+                        text: "Включить локальный ноль";
+                        checked <=> UiSettings.local_offset_enabled;
+                        toggled => { root.update_preview(); }
+                    }
+                    HorizontalLayout {
+                        Text { text: "Смещение X (мм):"; vertical-alignment: center; }
+                        LineEdit { text: UiSettings.local_offset_x + ""; preferred-width: 90px; enabled: UiSettings.local_offset_enabled; accepted => { UiSettings.local_offset_x = self.text.to-float(); root.update_preview(); } }
+                    }
+                    HorizontalLayout {
+                        Text { text: "Смещение Y (мм):"; vertical-alignment: center; }
+                        LineEdit { text: UiSettings.local_offset_y + ""; preferred-width: 90px; enabled: UiSettings.local_offset_enabled; accepted => { UiSettings.local_offset_y = self.text.to-float(); root.update_preview(); } }
+                    }
+                    Text { text: "Текстолит: X −ширина…0, Y 0…высота"; wrap: word-wrap; color: #aaaaaa; }
+                    HorizontalLayout {
+                        Text { text: "Ширина (мм):"; vertical-alignment: center; }
+                        LineEdit { text: UiSettings.material_width + ""; preferred-width: 90px; accepted => { UiSettings.material_width = self.text.to-float(); root.update_preview(); } }
+                    }
+                    HorizontalLayout {
+                        Text { text: "Высота (мм):"; vertical-alignment: center; }
+                        LineEdit { text: UiSettings.material_height + ""; preferred-width: 90px; accepted => { UiSettings.material_height = self.text.to-float(); root.update_preview(); } }
                     }
 
                     Text { text: "Перемычки"; font-weight: 600; }
