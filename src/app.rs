@@ -290,14 +290,79 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let viewport_state = viewport.clone();
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
-    main_window.on_zoom_preview(move |direction| {
-        {
-            viewport_state.borrow_mut().zoom_by(direction);
+    main_window.on_zoom_preview(move |direction, mouse_x, mouse_y, width, height| {
+        if width <= 0.0 || height <= 0.0 {
+            return;
         }
-        if let Some(window) = window_weak.upgrade() {
-            window.invoke_update_preview();
+        let (Some(window), Some(board_rc), Some(frame_rc), Some(settings_rc)) = (
+            window_weak.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_settings.upgrade(),
+        ) else {
+            return;
+        };
+        let (Some(bounds), Some(frame)) = (
+            board_rc.borrow().as_ref().cloned(),
+            frame_rc.borrow().as_ref().cloned(),
+        ) else {
+            return;
+        };
+        let settings = settings_rc.borrow().clone();
+        let (shift_x, shift_y) = settings.local_offset();
+        let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
+        let preview_left = expanded
+            .as_ref()
+            .map_or(frame.left, |value| frame.left.min(value.left));
+        let preview_right = expanded
+            .as_ref()
+            .map_or(frame.right, |value| frame.right.max(value.right));
+        let preview_bottom = expanded
+            .as_ref()
+            .map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
+        let preview_top = expanded
+            .as_ref()
+            .map_or(frame.top, |value| frame.top.max(value.top));
+        let data = preview::PreviewData::from_bounds_with_material(
+            bounds.x_min + shift_x,
+            bounds.x_max + shift_x,
+            bounds.y_min + shift_y,
+            bounds.y_max + shift_y,
+            preview_left + shift_x,
+            preview_right + shift_x,
+            preview_bottom + shift_y,
+            preview_top + shift_y,
+            settings.material_width,
+            settings.material_height,
+        );
+        let (min_x, max_x, min_y, max_y) = data.world_bounds();
+        let content_width = max_x - min_x;
+        let content_height = max_y - min_y;
+        let base_scale = data.calculate_scale(width, height);
+        let mut camera = *viewport_state.borrow();
+        let old_scale = base_scale * camera.zoom;
+        if old_scale <= 0.0 {
+            return;
         }
+        let world_x = min_x
+            + (mouse_x as f64 - (width as f64 - content_width * old_scale) / 2.0 - camera.pan_x)
+                / old_scale;
+        let world_y = min_y
+            + ((height as f64 + content_height * old_scale) / 2.0 + camera.pan_y - mouse_y as f64)
+                / old_scale;
+        camera.zoom_by(direction);
+        let new_scale = base_scale * camera.zoom;
+        camera.pan_x = mouse_x as f64
+            - (width as f64 - content_width * new_scale) / 2.0
+            - (world_x - min_x) * new_scale;
+        camera.pan_y = mouse_y as f64 - (height as f64 + content_height * new_scale) / 2.0
+            + (world_y - min_y) * new_scale;
+        *viewport_state.borrow_mut() = camera;
+        window.invoke_update_preview();
     });
     let viewport_state = viewport.clone();
     let weak_board = Rc::downgrade(&board_bounds);
