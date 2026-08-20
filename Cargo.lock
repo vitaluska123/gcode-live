@@ -3367,6 +3367,7 @@ checksum = "35fb2e5f958ec131621fdd531e9fc186ed768cbe395337403ae56c17a74c68ec"
 name = "pcb-frame-generator"
 version = "0.1.103"
 dependencies = [
+ "image",
  "rfd",
  "serde",
  "serde_json",
@@ -4302,6 +4303,7 @@ checksum = "ce12038f57f8f3a423564b0c9301a2ab3fda4246e4cbadd6b97acf9124bdc315"
 dependencies = [
  "const-field-offset",
  "i-slint-backend-selector",
+ "i-slint-backend-winit",
  "i-slint-common",
  "i-slint-core",
  "i-slint-core-macros",
