@@ -42,6 +42,7 @@ export component MainWindow inherits Window {
     in-out property<string> cursor_coordinates: "X: —   Y: —";
     in-out property<int> active_tab: 0;
     in-out property<string> source_gcode: "";
+    in-out property<bool> source_gcode_truncated: false;
     in-out property<string> final_gcode: "";
 
     callback open_tap_file();
@@ -339,8 +340,13 @@ export component MainWindow inherits Window {
                     title: "Исходный G-code";
                     VerticalLayout {
                         Text { text: "Изменения вступят в силу после нажатия «Применить»."; color: #aaaaaa; }
+                        Text {
+                            text: "Большой файл показан частично, чтобы приложение работало стабильно.";
+                            color: #e0a040;
+                            visible: root.source_gcode_truncated;
+                        }
                         TextEdit { text <=> root.source_gcode; font-family: "Consolas"; font-size: 14px; wrap: no-wrap; vertical-stretch: 1; }
-                        HorizontalLayout { Button { text: "Применить исходный G-code"; clicked => { root.apply_source_gcode(); } } Rectangle { horizontal-stretch: 1; } }
+                        HorizontalLayout { Button { text: "Применить исходный G-code"; enabled: !root.source_gcode_truncated; clicked => { root.apply_source_gcode(); } } Rectangle { horizontal-stretch: 1; } }
                     }
                 }
                 Tab {

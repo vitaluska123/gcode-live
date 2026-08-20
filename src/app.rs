@@ -5,6 +5,27 @@ use std::rc::Rc;
 use crate::viewport::Viewport;
 use crate::{exporter, frame, preview, preview_renderer, settings, MainWindow, UiSettings};
 
+// Slint's text editor eagerly lays out its entire value.  Keep the editor
+// responsive and avoid renderer crashes when an otherwise valid TAP is huge.
+const MAX_SOURCE_EDITOR_BYTES: usize = 10 * 1024;
+
+fn source_gcode_for_editor(content: &str) -> (String, bool) {
+    if content.len() <= MAX_SOURCE_EDITOR_BYTES {
+        return (content.to_owned(), false);
+    }
+
+    let max_end = content.floor_char_boundary(MAX_SOURCE_EDITOR_BYTES);
+    let end = content[..max_end].rfind('\n').unwrap_or(max_end);
+    (
+        format!(
+            "{}\n\n; --- Display limited to the first {} KB of a large source file ---\n",
+            &content[..end],
+            MAX_SOURCE_EDITOR_BYTES / 1024
+        ),
+        true,
+    )
+}
+
 pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     // Load settings
     let settings = match settings::Settings::load() {
@@ -35,6 +56,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let source_home = Rc::new(RefCell::new(None));
     let toolpath = Rc::new(RefCell::new(Vec::new()));
     let rapid_path = Rc::new(RefCell::new(Vec::new()));
+    let source_file_stem = Rc::new(RefCell::new(None::<String>));
     let viewport = Rc::new(RefCell::new(Viewport::default()));
     let pointer_position = Rc::new(RefCell::new(None::<(f64, f64)>));
     let current_settings = Rc::new(RefCell::new(settings));
@@ -109,6 +131,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let weak_home = Rc::downgrade(&source_home);
     let weak_toolpath = Rc::downgrade(&toolpath);
     let weak_rapid_path = Rc::downgrade(&rapid_path);
+    let weak_source_file_stem = Rc::downgrade(&source_file_stem);
     let window_weak = main_window.as_weak();
 
     main_window.on_open_tap_file(move || {
@@ -133,6 +156,9 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let Some(rapid_rc) = weak_rapid_path.upgrade() else {
             return;
         };
+        let Some(source_file_stem_rc) = weak_source_file_stem.upgrade() else {
+            return;
+        };
 
         let Some(file_path) = rfd::FileDialog::new()
             .add_filter("TAP Files", &["tap", "nc", "gcode", "ngc"])
@@ -148,6 +174,11 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
                 return;
             }
         };
+
+        *source_file_stem_rc.borrow_mut() = file_path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .filter(|stem| !stem.is_empty());
 
         let bounds = frame::parse_gcode_bounds(&content);
         let home = frame::parse_gcode_home_position(&content);
@@ -190,7 +221,9 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         *home_rc.borrow_mut() = home;
         *path_rc.borrow_mut() = path;
         *rapid_rc.borrow_mut() = rapid;
-        window.set_source_gcode(content.clone().into());
+        let (source_gcode, source_gcode_truncated) = source_gcode_for_editor(&content);
+        window.set_source_gcode(source_gcode.into());
+        window.set_source_gcode_truncated(source_gcode_truncated);
         window.set_final_gcode(
             exporter::generate_frame_gcode(&bounds, &frame, &settings_rc.borrow(), home).into(),
         );
@@ -574,6 +607,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let weak_viewport = Rc::downgrade(&viewport);
     let weak_settings = Rc::downgrade(&current_settings);
     let weak_home = Rc::downgrade(&source_home);
+    let weak_source_file_stem = Rc::downgrade(&source_file_stem);
     let window_weak = main_window.as_weak();
 
     main_window.on_export_tap(move || {
@@ -582,6 +616,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let Some(frame_rc) = weak_frame.upgrade() else { return; };
         let Some(settings_rc) = weak_settings.upgrade() else { return; };
         let Some(home_rc) = weak_home.upgrade() else { return; };
+        let Some(source_file_stem_rc) = weak_source_file_stem.upgrade() else { return; };
 
         let board_borrow = board_rc.borrow();
         let Some(bounds) = board_borrow.as_ref() else {
@@ -614,8 +649,13 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             if !matches!(accepted, rfd::MessageDialogResult::Ok) { return; }
         }
 
+        let suggested_file_name = source_file_stem_rc
+            .borrow()
+            .as_deref()
+            .map(|stem| format!("{stem}_frame.tap"))
+            .unwrap_or_else(|| "frame.tap".to_owned());
         let Some(file_path) = rfd::FileDialog::new()
-            .set_file_name("frame.tap")
+            .set_file_name(&suggested_file_name)
             .save_file()
         else {
             return;
