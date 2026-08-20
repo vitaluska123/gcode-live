@@ -253,14 +253,24 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
     let weak_viewport = Rc::downgrade(&viewport);
+    let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
     main_window.on_cursor_moved(move |x, y, width, height| {
         if width <= 0.0 || height <= 0.0 { return; }
-        let (Some(window), Some(board), Some(frame), Some(viewport)) = (
-            window_weak.upgrade(), weak_board.upgrade(), weak_frame.upgrade(), weak_viewport.upgrade(),
+        let (Some(window), Some(board), Some(frame), Some(viewport), Some(settings_rc)) = (
+            window_weak.upgrade(), weak_board.upgrade(), weak_frame.upgrade(), weak_viewport.upgrade(), weak_settings.upgrade(),
         ) else { return; };
         let (Some(bounds), Some(frame)) = (board.borrow().as_ref().cloned(), frame.borrow().as_ref().cloned()) else { return; };
-        let data = preview::PreviewData::from_bounds(bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max, frame.left, frame.right, frame.bottom, frame.top);
+        let settings = settings_rc.borrow().clone();
+        let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
+        let preview_left = expanded.as_ref().map_or(frame.left, |value| frame.left.min(value.left));
+        let preview_right = expanded.as_ref().map_or(frame.right, |value| frame.right.max(value.right));
+        let preview_bottom = expanded.as_ref().map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
+        let preview_top = expanded.as_ref().map_or(frame.top, |value| frame.top.max(value.top));
+        let data = preview::PreviewData::from_bounds(
+            bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max,
+            preview_left, preview_right, preview_bottom, preview_top,
+        );
         let camera = *viewport.borrow();
         let scale = data.calculate_scale(width, height) * camera.zoom;
         if scale <= 0.0 { return; }
