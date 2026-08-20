@@ -368,18 +368,11 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let window_weak = main_window.as_weak();
 
     main_window.on_render_preview(move |width, height| {
-        let requested_width = width.max(1.0) as f64;
-        let requested_height = height.max(1.0) as f64;
-        // The current preview is CPU-rendered. Rendering a full window-sized
-        // pixel buffer for every mouse-move needlessly stalls the UI. Keep the
-        // aspect ratio but cap the working surface to a responsive size; Slint
-        // scales that image to the viewport afterwards.
-        const MAX_PREVIEW_PIXELS: f64 = 360_000.0;
-        let reduction = (MAX_PREVIEW_PIXELS / (requested_width * requested_height))
-            .sqrt()
-            .min(1.0);
-        let width = (requested_width * reduction).round().max(1.0) as u32;
-        let height = (requested_height * reduction).round().max(1.0) as u32;
+        // Camera panning is expressed in canvas pixels, so the software buffer
+        // must use the exact canvas size. Downscaling it here causes dragging
+        // and the displayed image to move by different amounts after resize.
+        let width = width.max(1.0).round() as u32;
+        let height = height.max(1.0).round() as u32;
 
         if width == 0 || height == 0 {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
