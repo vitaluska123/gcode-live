@@ -49,6 +49,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     ui_settings.set_local_offset_y(settings.local_offset_y as f32);
     ui_settings.set_material_width(settings.material_width as f32);
     ui_settings.set_material_height(settings.material_height as f32);
+    ui_settings.set_material_offset_x(settings.material_offset_x as f32);
+    ui_settings.set_material_offset_y(settings.material_offset_y as f32);
 
     // State management
     let board_bounds = Rc::new(RefCell::new(None));
@@ -89,6 +91,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             local_offset_y: ui_settings.get_local_offset_y() as f64,
             material_width: ui_settings.get_material_width() as f64,
             material_height: ui_settings.get_material_height() as f64,
+            material_offset_x: ui_settings.get_material_offset_x() as f64,
+            material_offset_y: ui_settings.get_material_offset_y() as f64,
             ..source_settings
         };
 
@@ -373,6 +377,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             preview_top + shift_y,
             settings.material_width,
             settings.material_height,
+            settings.material_offset_x,
+            settings.material_offset_y,
         );
         let (min_x, max_x, min_y, max_y) = data.world_bounds();
         let content_width = max_x - min_x;
@@ -432,6 +438,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             frame.top + shift_y,
             settings.material_width,
             settings.material_height,
+            settings.material_offset_x,
+            settings.material_offset_y,
         );
         let width = window.get_preview_width().max(1.0) as f64;
         let height = window.get_preview_height().max(1.0) as f64;
@@ -525,6 +533,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             preview_top + shift_y,
             settings.material_width,
             settings.material_height,
+            settings.material_offset_x,
+            settings.material_offset_y,
         );
         let camera = *viewport.borrow();
         let scale = data.calculate_scale(width, height) * camera.zoom;
@@ -579,6 +589,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             local_offset_y: ui_settings.get_local_offset_y() as f64,
             material_width: ui_settings.get_material_width() as f64,
             material_height: ui_settings.get_material_height() as f64,
+            material_offset_x: ui_settings.get_material_offset_x() as f64,
+            material_offset_y: ui_settings.get_material_offset_y() as f64,
             ..source_settings
         };
 
@@ -632,10 +644,14 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
 
         let settings = settings_rc.borrow().clone();
         let (shift_x, shift_y) = settings.local_offset();
-        let exceeds_material = frame.left + shift_x < -settings.material_width.max(0.0)
-            || frame.bottom + shift_y < 0.0
-            || frame.right + shift_x > 0.0
-            || frame.top + shift_y > settings.material_height.max(0.0);
+        let material_left = settings.material_offset_x - settings.material_width.max(0.0);
+        let material_right = settings.material_offset_x;
+        let material_bottom = settings.material_offset_y;
+        let material_top = settings.material_offset_y + settings.material_height.max(0.0);
+        let exceeds_material = frame.left + shift_x < material_left
+            || frame.bottom + shift_y < material_bottom
+            || frame.right + shift_x > material_right
+            || frame.top + shift_y > material_top;
         if exceeds_material {
             let accepted = rfd::MessageDialog::new()
                 .set_level(rfd::MessageLevel::Warning)
@@ -756,6 +772,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             preview_top + shift_y,
             settings.material_width,
             settings.material_height,
+            settings.material_offset_x,
+            settings.material_offset_y,
         );
 
         let viewport = *viewport_rc.borrow();
@@ -803,20 +821,20 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             pan,
         );
         let material = [
-            (-settings.material_width, 0.0),
-            (0.0, 0.0),
-            (0.0, settings.material_height),
-            (-settings.material_width, settings.material_height),
-            (-settings.material_width, 0.0),
+            (settings.material_offset_x - settings.material_width, settings.material_offset_y),
+            (settings.material_offset_x, settings.material_offset_y),
+            (settings.material_offset_x, settings.material_offset_y + settings.material_height),
+            (settings.material_offset_x - settings.material_width, settings.material_offset_y + settings.material_height),
+            (settings.material_offset_x - settings.material_width, settings.material_offset_y),
         ];
-        preview_renderer::rectangle(
+        preview_renderer::dotted_rectangle(
             &mut buffer,
             &material,
             &preview_data,
             scale,
             width as f32,
             height as f32,
-            (120, 170, 120),
+            (190, 100, 255),
             pan,
         );
         if let Some(expanded) = expanded {
@@ -834,6 +852,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
                 scale,
                 width as f32,
                 height as f32,
+                (255, 210, 0),
                 pan,
             );
         }

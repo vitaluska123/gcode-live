@@ -6,6 +6,8 @@
   "local_offset_y": 20.0,
   "material_width": 150.0,
   "material_height": 150.0,
+  "material_offset_x": 0.0,
+  "material_offset_y": 0.0,
   "tab_width": 3.0,
   "minimum_tabs": 3,
   "maximum_tab_gap": 20.0,

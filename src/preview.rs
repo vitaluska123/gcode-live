@@ -13,6 +13,8 @@ pub struct PreviewData {
     pub frame_top: f64,
     pub material_width: f64,
     pub material_height: f64,
+    pub material_offset_x: f64,
+    pub material_offset_y: f64,
     /// Whether we have valid data to display
     pub has_data: bool,
 }
@@ -30,6 +32,8 @@ impl Default for PreviewData {
             frame_top: 0.0,
             material_width: 0.0,
             material_height: 0.0,
+            material_offset_x: 0.0,
+            material_offset_y: 0.0,
             has_data: false,
         }
     }
@@ -47,6 +51,8 @@ impl PreviewData {
         frame_top: f64,
         material_width: f64,
         material_height: f64,
+        material_offset_x: f64,
+        material_offset_y: f64,
     ) -> Self {
         Self {
             board_x_min,
@@ -59,6 +65,8 @@ impl PreviewData {
             frame_top,
             material_width: material_width.max(0.0),
             material_height: material_height.max(0.0),
+            material_offset_x,
+            material_offset_y,
             has_data: true,
         }
     }
@@ -67,12 +75,12 @@ impl PreviewData {
         (
             self.board_x_min
                 .min(self.frame_left)
-                .min(-self.material_width),
-            self.board_x_max.max(self.frame_right).max(0.0),
-            self.board_y_min.min(self.frame_bottom).min(0.0),
+                .min(self.material_offset_x - self.material_width),
+            self.board_x_max.max(self.frame_right).max(self.material_offset_x),
+            self.board_y_min.min(self.frame_bottom).min(self.material_offset_y),
             self.board_y_max
                 .max(self.frame_top)
-                .max(self.material_height),
+                .max(self.material_offset_y + self.material_height),
         )
     }
 

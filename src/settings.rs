@@ -19,6 +19,12 @@ pub struct Settings {
     pub material_width: f64,
     #[serde(default = "default_material_height")]
     pub material_height: f64,
+    /// Position of the material's right edge relative to machine zero (mm).
+    #[serde(default)]
+    pub material_offset_x: f64,
+    /// Position of the material's bottom edge relative to machine zero (mm).
+    #[serde(default)]
+    pub material_offset_y: f64,
     /// Width of an uncut holding tab on the upper frame edge (mm).
     pub tab_width: f64,
     /// Minimum number of holding tabs.
@@ -55,6 +61,8 @@ impl Default for Settings {
             local_offset_y: 0.0,
             material_width: 150.0,
             material_height: 150.0,
+            material_offset_x: 0.0,
+            material_offset_y: 0.0,
             tab_width: 3.0,
             minimum_tabs: 3,
             maximum_tab_gap: 20.0,
@@ -99,6 +107,8 @@ impl Settings {
             local_offset_y: round_two(self.local_offset_y),
             material_width: round_two(self.material_width),
             material_height: round_two(self.material_height),
+            material_offset_x: round_two(self.material_offset_x),
+            material_offset_y: round_two(self.material_offset_y),
             tab_width: round_two(self.tab_width),
             minimum_tabs: self.minimum_tabs,
             maximum_tab_gap: round_two(self.maximum_tab_gap),

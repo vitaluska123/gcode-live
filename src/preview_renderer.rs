@@ -240,6 +240,7 @@ pub fn dotted_rectangle(
     scale: f64,
     width: f32,
     height: f32,
+    color: (u8, u8, u8),
     pan: (f64, f64),
 ) {
     for pair in corners.windows(2) {
@@ -258,7 +259,7 @@ pub fn dotted_rectangle(
                 y1 + dy * t1 + pan.1 as f32,
                 x1 + dx * t2 + pan.0 as f32,
                 y1 + dy * t2 + pan.1 as f32,
-                (255, 210, 0),
+                color,
                 2,
                 0.3,
             );
