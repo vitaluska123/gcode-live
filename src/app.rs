@@ -51,6 +51,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     ui_settings.set_material_height(settings.material_height as f32);
     ui_settings.set_material_offset_x(settings.material_offset_x as f32);
     ui_settings.set_material_offset_y(settings.material_offset_y as f32);
+    ui_settings.set_material_edge_margin_x(settings.material_edge_margin_x as f32);
+    ui_settings.set_material_edge_margin_y(settings.material_edge_margin_y as f32);
 
     // State management
     let board_bounds = Rc::new(RefCell::new(None));
@@ -93,6 +95,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             material_height: ui_settings.get_material_height() as f64,
             material_offset_x: ui_settings.get_material_offset_x() as f64,
             material_offset_y: ui_settings.get_material_offset_y() as f64,
+            material_edge_margin_x: ui_settings.get_material_edge_margin_x().max(0.0) as f64,
+            material_edge_margin_y: ui_settings.get_material_edge_margin_y().max(0.0) as f64,
             ..source_settings
         };
 
@@ -591,6 +595,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             material_height: ui_settings.get_material_height() as f64,
             material_offset_x: ui_settings.get_material_offset_x() as f64,
             material_offset_y: ui_settings.get_material_offset_y() as f64,
+            material_edge_margin_x: ui_settings.get_material_edge_margin_x().max(0.0) as f64,
+            material_edge_margin_y: ui_settings.get_material_edge_margin_y().max(0.0) as f64,
             ..source_settings
         };
 
@@ -663,6 +669,25 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
                 .set_buttons(rfd::MessageButtons::OkCancel)
                 .show();
             if !matches!(accepted, rfd::MessageDialogResult::Ok) { return; }
+        } else {
+            let edge_margin_x = settings.material_edge_margin_x.max(0.0);
+            let edge_margin_y = settings.material_edge_margin_y.max(0.0);
+            let too_close_to_edge = frame.left + shift_x < material_left + edge_margin_x
+                || frame.right + shift_x > material_right - edge_margin_x
+                || frame.bottom + shift_y < material_bottom + edge_margin_y
+                || frame.top + shift_y > material_top - edge_margin_y;
+            if too_close_to_edge {
+                let accepted = rfd::MessageDialog::new()
+                    .set_level(rfd::MessageLevel::Warning)
+                    .set_title("Плата слишком близко к краю")
+                    .set_description(format!(
+                        "Рамка находится ближе заданного минимального отступа {:.1} × {:.1} мм от края текстолита. Продолжить экспорт?",
+                        edge_margin_x, edge_margin_y
+                    ))
+                    .set_buttons(rfd::MessageButtons::OkCancel)
+                    .show();
+                if !matches!(accepted, rfd::MessageDialogResult::Ok) { return; }
+            }
         }
 
         let suggested_file_name = source_file_stem_rc
@@ -835,6 +860,25 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             width as f32,
             height as f32,
             (190, 100, 255),
+            pan,
+        );
+        let edge_margin_x = settings.material_edge_margin_x.max(0.0);
+        let edge_margin_y = settings.material_edge_margin_y.max(0.0);
+        let safe_area = [
+            (settings.material_offset_x - settings.material_width + edge_margin_x, settings.material_offset_y + edge_margin_y),
+            (settings.material_offset_x - edge_margin_x, settings.material_offset_y + edge_margin_y),
+            (settings.material_offset_x - edge_margin_x, settings.material_offset_y + settings.material_height - edge_margin_y),
+            (settings.material_offset_x - settings.material_width + edge_margin_x, settings.material_offset_y + settings.material_height - edge_margin_y),
+            (settings.material_offset_x - settings.material_width + edge_margin_x, settings.material_offset_y + edge_margin_y),
+        ];
+        preview_renderer::dotted_rectangle(
+            &mut buffer,
+            &safe_area,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            (255, 70, 70),
             pan,
         );
         if let Some(expanded) = expanded {

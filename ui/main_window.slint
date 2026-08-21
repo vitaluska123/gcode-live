@@ -19,6 +19,8 @@ export global UiSettings {
     in-out property<float> material_height: 150.0;
     in-out property<float> material_offset_x: 0.0;
     in-out property<float> material_offset_y: 0.0;
+    in-out property<float> material_edge_margin_x: 0.0;
+    in-out property<float> material_edge_margin_y: 0.0;
 }
 
 export component MainWindow inherits Window {
@@ -104,7 +106,7 @@ export component MainWindow inherits Window {
                 title: "Настройки";
 
                 TabWidget {
-                    preferred-height: 260px;
+                    preferred-height: 310px;
 
                     Tab {
                         title: "Рамка";
@@ -133,6 +135,9 @@ export component MainWindow inherits Window {
                             HorizontalLayout { vertical-stretch: 0; Text { text: "Высота (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.material_height + ""; preferred-width: 90px; accepted => { UiSettings.material_height = self.text.to-float(); root.update_preview(); } } }
                             HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ X (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.material_offset_x + ""; preferred-width: 90px; accepted => { UiSettings.material_offset_x = self.text.to-float(); root.update_preview(); } } }
                             HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ Y (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.material_offset_y + ""; preferred-width: 90px; accepted => { UiSettings.material_offset_y = self.text.to-float(); root.update_preview(); } } }
+                            Text { vertical-stretch: 0; text: "Мин. отступ до края текстолита"; wrap: word-wrap; color: #aaaaaa; }
+                            HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ X (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.material_edge_margin_x + ""; preferred-width: 90px; accepted => { UiSettings.material_edge_margin_x = self.text.to-float(); root.update_preview(); } } }
+                            HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ Y (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.material_edge_margin_y + ""; preferred-width: 90px; accepted => { UiSettings.material_edge_margin_y = self.text.to-float(); root.update_preview(); } } }
                             Rectangle { vertical-stretch: 1; }
                         }
                     }
