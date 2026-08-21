@@ -846,11 +846,23 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             pan,
         );
         let material = [
-            (settings.material_offset_x - settings.material_width, settings.material_offset_y),
+            (
+                settings.material_offset_x - settings.material_width,
+                settings.material_offset_y,
+            ),
             (settings.material_offset_x, settings.material_offset_y),
-            (settings.material_offset_x, settings.material_offset_y + settings.material_height),
-            (settings.material_offset_x - settings.material_width, settings.material_offset_y + settings.material_height),
-            (settings.material_offset_x - settings.material_width, settings.material_offset_y),
+            (
+                settings.material_offset_x,
+                settings.material_offset_y + settings.material_height,
+            ),
+            (
+                settings.material_offset_x - settings.material_width,
+                settings.material_offset_y + settings.material_height,
+            ),
+            (
+                settings.material_offset_x - settings.material_width,
+                settings.material_offset_y,
+            ),
         ];
         preview_renderer::dotted_rectangle(
             &mut buffer,
@@ -865,12 +877,43 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let edge_margin_x = settings.material_edge_margin_x.max(0.0);
         let edge_margin_y = settings.material_edge_margin_y.max(0.0);
         let safe_area = [
-            (settings.material_offset_x - settings.material_width + edge_margin_x, settings.material_offset_y + edge_margin_y),
-            (settings.material_offset_x - edge_margin_x, settings.material_offset_y + edge_margin_y),
-            (settings.material_offset_x - edge_margin_x, settings.material_offset_y + settings.material_height - edge_margin_y),
-            (settings.material_offset_x - settings.material_width + edge_margin_x, settings.material_offset_y + settings.material_height - edge_margin_y),
-            (settings.material_offset_x - settings.material_width + edge_margin_x, settings.material_offset_y + edge_margin_y),
+            (
+                settings.material_offset_x - settings.material_width + edge_margin_x,
+                settings.material_offset_y + edge_margin_y,
+            ),
+            (
+                settings.material_offset_x - edge_margin_x,
+                settings.material_offset_y + edge_margin_y,
+            ),
+            (
+                settings.material_offset_x - edge_margin_x,
+                settings.material_offset_y + settings.material_height - edge_margin_y,
+            ),
+            (
+                settings.material_offset_x - settings.material_width + edge_margin_x,
+                settings.material_offset_y + settings.material_height - edge_margin_y,
+            ),
+            (
+                settings.material_offset_x - settings.material_width + edge_margin_x,
+                settings.material_offset_y + edge_margin_y,
+            ),
         ];
+        preview_renderer::hatched_margin(
+            &mut buffer,
+            settings.material_offset_x - settings.material_width,
+            settings.material_offset_x,
+            settings.material_offset_y,
+            settings.material_offset_y + settings.material_height,
+            settings.material_offset_x - settings.material_width + edge_margin_x,
+            settings.material_offset_x - edge_margin_x,
+            settings.material_offset_y + edge_margin_y,
+            settings.material_offset_y + settings.material_height - edge_margin_y,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            pan,
+        );
         preview_renderer::dotted_rectangle(
             &mut buffer,
             &safe_area,

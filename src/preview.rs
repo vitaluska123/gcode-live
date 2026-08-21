@@ -76,8 +76,12 @@ impl PreviewData {
             self.board_x_min
                 .min(self.frame_left)
                 .min(self.material_offset_x - self.material_width),
-            self.board_x_max.max(self.frame_right).max(self.material_offset_x),
-            self.board_y_min.min(self.frame_bottom).min(self.material_offset_y),
+            self.board_x_max
+                .max(self.frame_right)
+                .max(self.material_offset_x),
+            self.board_y_min
+                .min(self.frame_bottom)
+                .min(self.material_offset_y),
             self.board_y_max
                 .max(self.frame_top)
                 .max(self.material_offset_y + self.material_height),

@@ -267,6 +267,85 @@ pub fn dotted_rectangle(
     }
 }
 
+/// Fill the area between two axis-aligned rectangles with a translucent hatch.
+pub fn hatched_margin(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    outer_left: f64,
+    outer_right: f64,
+    outer_bottom: f64,
+    outer_top: f64,
+    inner_left: f64,
+    inner_right: f64,
+    inner_bottom: f64,
+    inner_top: f64,
+    preview: &PreviewData,
+    scale: f64,
+    width: f32,
+    height: f32,
+    pan: (f64, f64),
+) {
+    if inner_left <= outer_left
+        || inner_right >= outer_right
+        || inner_bottom <= outer_bottom
+        || inner_top >= outer_top
+    {
+        return;
+    }
+
+    let (outer_x1, outer_y1) = preview.world_to_screen(outer_left, outer_top, scale, width, height);
+    let (outer_x2, outer_y2) =
+        preview.world_to_screen(outer_right, outer_bottom, scale, width, height);
+    let (inner_x1, inner_y1) = preview.world_to_screen(inner_left, inner_top, scale, width, height);
+    let (inner_x2, inner_y2) =
+        preview.world_to_screen(inner_right, inner_bottom, scale, width, height);
+    let (left, right) = (
+        outer_x1.min(outer_x2) + pan.0 as f32,
+        outer_x1.max(outer_x2) + pan.0 as f32,
+    );
+    let (top, bottom) = (
+        outer_y1.min(outer_y2) + pan.1 as f32,
+        outer_y1.max(outer_y2) + pan.1 as f32,
+    );
+    let excluded = (
+        inner_x1.min(inner_x2) + pan.0 as f32,
+        inner_x1.max(inner_x2) + pan.0 as f32,
+        inner_y1.min(inner_y2) + pan.1 as f32,
+        inner_y1.max(inner_y2) + pan.1 as f32,
+    );
+
+    // Do not trace hatching outside the viewport. At high zoom, the material
+    // can be thousands of screen pixels wide even though only a small part is
+    // visible; drawing those off-screen pixels made panning noticeably slow.
+    let visible_left = left.max(0.0);
+    let visible_right = right.min(width);
+    let visible_top = top.max(0.0);
+    let visible_bottom = bottom.min(height);
+    if visible_left >= visible_right || visible_top >= visible_bottom {
+        return;
+    }
+
+    let visible_diagonal_height = visible_bottom - visible_top;
+    // Keep the preview responsive: never draw more than 80 hatch strokes.
+    // The spacing grows only when necessary at large zoom levels.
+    let hatch_step = 12.0_f32.max((visible_right - visible_left + visible_diagonal_height) / 80.0);
+    let mut start_x = visible_left - visible_diagonal_height;
+    while start_x < visible_right {
+        line_alpha_outside_rect(
+            buffer,
+            start_x,
+            visible_top,
+            start_x + visible_diagonal_height,
+            visible_bottom,
+            (255, 70, 70),
+            1,
+            0.25,
+            (left, right, top, bottom),
+            excluded,
+        );
+        start_x += hatch_step;
+    }
+}
+
 pub fn rectangle(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     corners: &[(f64, f64)],
@@ -318,6 +397,72 @@ fn line_alpha(
         let mut error = dx + dy;
         loop {
             if x >= 0 && y >= 0 && x < buffer_width && y < buffer_height {
+                let previous = pixels[(y * buffer_width + x) as usize];
+                let blend = |source: u8, destination: u8| {
+                    (source as f32 * opacity + destination as f32 * (1.0 - opacity)).round() as u8
+                };
+                pixels[(y * buffer_width + x) as usize] = slint::Rgb8Pixel::new(
+                    blend(color.0, previous.r),
+                    blend(color.1, previous.g),
+                    blend(color.2, previous.b),
+                );
+            }
+            if x == end_x && y == end_y {
+                break;
+            }
+            let twice = 2 * error;
+            if twice >= dy {
+                error += dy;
+                x += step_x;
+            }
+            if twice <= dx {
+                error += dx;
+                y += step_y;
+            }
+        }
+    }
+}
+
+fn line_alpha_outside_rect(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    color: (u8, u8, u8),
+    thickness: i32,
+    opacity: f32,
+    outer: (f32, f32, f32, f32),
+    excluded: (f32, f32, f32, f32),
+) {
+    let buffer_width = buffer.width() as i32;
+    let buffer_height = buffer.height() as i32;
+    let pixels = buffer.make_mut_slice();
+    for offset in 0..thickness {
+        let (mut x, mut y) = (x0.round() as i32, y0.round() as i32 + offset);
+        let (end_x, end_y) = (x1.round() as i32, y1.round() as i32 + offset);
+        let (dx, dy) = ((end_x - x).abs(), -(end_y - y).abs());
+        let (step_x, step_y) = (
+            if x < end_x { 1 } else { -1 },
+            if y < end_y { 1 } else { -1 },
+        );
+        let mut error = dx + dy;
+        loop {
+            let inside_outer = x as f32 >= outer.0
+                && x as f32 <= outer.1
+                && y as f32 >= outer.2
+                && y as f32 <= outer.3;
+            let inside_excluded = x as f32 >= excluded.0
+                && x as f32 <= excluded.1
+                && y as f32 >= excluded.2
+                && y as f32 <= excluded.3;
+            if x >= 0
+                && y >= 0
+                && x < buffer_width
+                && y < buffer_height
+                && inside_outer
+                && !inside_excluded
+            {
                 let previous = pixels[(y * buffer_width + x) as usize];
                 let blend = |source: u8, destination: u8| {
                     (source as f32 * opacity + destination as f32 * (1.0 - opacity)).round() as u8

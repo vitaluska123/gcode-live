@@ -27,6 +27,8 @@ fn set_window_icon(main_window: &MainWindow) -> Result<(), Box<dyn std::error::E
     let image = image::load_from_memory(include_bytes!("../icons/GcodeFrameGen.png"))?.into_rgba8();
     let (width, height) = image.dimensions();
     let icon = Icon::from_rgba(image.into_raw(), width, height)?;
-    main_window.window().with_winit_window(|window| window.set_window_icon(Some(icon)));
+    main_window
+        .window()
+        .with_winit_window(|window| window.set_window_icon(Some(icon)));
     Ok(())
 }
