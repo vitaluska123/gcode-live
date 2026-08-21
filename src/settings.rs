@@ -31,6 +31,22 @@ pub struct Settings {
     /// Minimum clearance between the frame and material edges along Y (mm).
     #[serde(default)]
     pub material_edge_margin_y: f64,
+    #[serde(default = "default_true")]
+    pub show_grid: bool,
+    #[serde(default = "default_true")]
+    pub show_axes: bool,
+    #[serde(default = "default_true")]
+    pub show_material: bool,
+    #[serde(default = "default_true")]
+    pub show_safe_area: bool,
+    #[serde(default = "default_true")]
+    pub show_margin_hatch: bool,
+    #[serde(default = "default_material_color")]
+    pub material_color: String,
+    #[serde(default = "default_safe_area_color")]
+    pub safe_area_color: String,
+    #[serde(default = "default_frame_color")]
+    pub frame_color: String,
     /// Width of an uncut holding tab on the upper frame edge (mm).
     pub tab_width: f64,
     /// Minimum number of holding tabs.
@@ -71,6 +87,14 @@ impl Default for Settings {
             material_offset_y: 0.0,
             material_edge_margin_x: 0.0,
             material_edge_margin_y: 0.0,
+            show_grid: true,
+            show_axes: true,
+            show_material: true,
+            show_safe_area: true,
+            show_margin_hatch: true,
+            material_color: default_material_color(),
+            safe_area_color: default_safe_area_color(),
+            frame_color: default_frame_color(),
             tab_width: 3.0,
             minimum_tabs: 3,
             maximum_tab_gap: 20.0,
@@ -156,6 +180,18 @@ fn default_material_width() -> f64 {
 }
 fn default_material_height() -> f64 {
     150.0
+}
+fn default_true() -> bool {
+    true
+}
+fn default_material_color() -> String {
+    "#be64ff".into()
+}
+fn default_safe_area_color() -> String {
+    "#ff4646".into()
+}
+fn default_frame_color() -> String {
+    "#ff4664".into()
 }
 
 impl Settings {

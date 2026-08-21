@@ -9,6 +9,18 @@ use crate::{exporter, frame, preview, preview_renderer, settings, MainWindow, Ui
 // responsive and avoid renderer crashes when an otherwise valid TAP is huge.
 const MAX_SOURCE_EDITOR_BYTES: usize = 10 * 1024;
 
+fn preview_color(value: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
+    let hex = value.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return fallback;
+    }
+    let parse = |range| u8::from_str_radix(&hex[range], 16).ok();
+    match (parse(0..2), parse(2..4), parse(4..6)) {
+        (Some(r), Some(g), Some(b)) => (r, g, b),
+        _ => fallback,
+    }
+}
+
 fn source_gcode_for_editor(content: &str) -> (String, bool) {
     if content.len() <= MAX_SOURCE_EDITOR_BYTES {
         return (content.to_owned(), false);
@@ -53,6 +65,21 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     ui_settings.set_material_offset_y(settings.material_offset_y as f32);
     ui_settings.set_material_edge_margin_x(settings.material_edge_margin_x as f32);
     ui_settings.set_material_edge_margin_y(settings.material_edge_margin_y as f32);
+    ui_settings.set_show_grid(settings.show_grid);
+    ui_settings.set_show_axes(settings.show_axes);
+    ui_settings.set_show_material(settings.show_material);
+    ui_settings.set_show_safe_area(settings.show_safe_area);
+    ui_settings.set_show_margin_hatch(settings.show_margin_hatch);
+    ui_settings.set_material_color(settings.material_color.clone().into());
+    ui_settings.set_safe_area_color(settings.safe_area_color.clone().into());
+    ui_settings.set_frame_color(settings.frame_color.clone().into());
+    let to_color = |value: &str, fallback| {
+        let (r, g, b) = preview_color(value, fallback);
+        slint::Color::from_rgb_u8(r, g, b)
+    };
+    ui_settings.set_material_preview_color(to_color(&settings.material_color, (190, 100, 255)));
+    ui_settings.set_safe_area_preview_color(to_color(&settings.safe_area_color, (255, 70, 70)));
+    ui_settings.set_frame_preview_color(to_color(&settings.frame_color, (255, 70, 100)));
 
     // State management
     let board_bounds = Rc::new(RefCell::new(None));
@@ -97,6 +124,14 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             material_offset_y: ui_settings.get_material_offset_y() as f64,
             material_edge_margin_x: ui_settings.get_material_edge_margin_x().max(0.0) as f64,
             material_edge_margin_y: ui_settings.get_material_edge_margin_y().max(0.0) as f64,
+            show_grid: ui_settings.get_show_grid(),
+            show_axes: ui_settings.get_show_axes(),
+            show_material: ui_settings.get_show_material(),
+            show_safe_area: ui_settings.get_show_safe_area(),
+            show_margin_hatch: ui_settings.get_show_margin_hatch(),
+            material_color: ui_settings.get_material_color().to_string(),
+            safe_area_color: ui_settings.get_safe_area_color().to_string(),
+            frame_color: ui_settings.get_frame_color().to_string(),
             ..source_settings
         };
 
@@ -597,6 +632,14 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             material_offset_y: ui_settings.get_material_offset_y() as f64,
             material_edge_margin_x: ui_settings.get_material_edge_margin_x().max(0.0) as f64,
             material_edge_margin_y: ui_settings.get_material_edge_margin_y().max(0.0) as f64,
+            show_grid: ui_settings.get_show_grid(),
+            show_axes: ui_settings.get_show_axes(),
+            show_material: ui_settings.get_show_material(),
+            show_safe_area: ui_settings.get_show_safe_area(),
+            show_margin_hatch: ui_settings.get_show_margin_hatch(),
+            material_color: ui_settings.get_material_color().to_string(),
+            safe_area_color: ui_settings.get_safe_area_color().to_string(),
+            frame_color: ui_settings.get_frame_color().to_string(),
             ..source_settings
         };
 
@@ -804,16 +847,20 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         let viewport = *viewport_rc.borrow();
         let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
         let pan = (viewport.pan_x, viewport.pan_y);
-        preview_renderer::draw_grid(&mut buffer, &preview_data, scale, pan);
-        preview_renderer::axes(
-            &mut buffer,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            pan,
-        );
-        if settings.local_offset_enabled {
+        if settings.show_grid {
+            preview_renderer::draw_grid(&mut buffer, &preview_data, scale, pan);
+        }
+        if settings.show_axes {
+            preview_renderer::axes(
+                &mut buffer,
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                pan,
+            );
+        }
+        if settings.show_axes && settings.local_offset_enabled {
             preview_renderer::local_axes(
                 &mut buffer,
                 &preview_data,
@@ -864,16 +911,18 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
                 settings.material_offset_y,
             ),
         ];
-        preview_renderer::dotted_rectangle(
-            &mut buffer,
-            &material,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            (190, 100, 255),
-            pan,
-        );
+        if settings.show_material {
+            preview_renderer::dotted_rectangle(
+                &mut buffer,
+                &material,
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                preview_color(&settings.material_color, (190, 100, 255)),
+                pan,
+            );
+        }
         let edge_margin_x = settings.material_edge_margin_x.max(0.0);
         let edge_margin_y = settings.material_edge_margin_y.max(0.0);
         let safe_area = [
@@ -898,32 +947,36 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
                 settings.material_offset_y + edge_margin_y,
             ),
         ];
-        preview_renderer::hatched_margin(
-            &mut buffer,
-            settings.material_offset_x - settings.material_width,
-            settings.material_offset_x,
-            settings.material_offset_y,
-            settings.material_offset_y + settings.material_height,
-            settings.material_offset_x - settings.material_width + edge_margin_x,
-            settings.material_offset_x - edge_margin_x,
-            settings.material_offset_y + edge_margin_y,
-            settings.material_offset_y + settings.material_height - edge_margin_y,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            pan,
-        );
-        preview_renderer::dotted_rectangle(
-            &mut buffer,
-            &safe_area,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            (255, 70, 70),
-            pan,
-        );
+        if settings.show_margin_hatch {
+            preview_renderer::hatched_margin(
+                &mut buffer,
+                settings.material_offset_x - settings.material_width,
+                settings.material_offset_x,
+                settings.material_offset_y,
+                settings.material_offset_y + settings.material_height,
+                settings.material_offset_x - settings.material_width + edge_margin_x,
+                settings.material_offset_x - edge_margin_x,
+                settings.material_offset_y + edge_margin_y,
+                settings.material_offset_y + settings.material_height - edge_margin_y,
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                pan,
+            );
+        }
+        if settings.show_safe_area {
+            preview_renderer::dotted_rectangle(
+                &mut buffer,
+                &safe_area,
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                preview_color(&settings.safe_area_color, (255, 70, 70)),
+                pan,
+            );
+        }
         if let Some(expanded) = expanded {
             let corners = [
                 (expanded.left + shift_x, expanded.bottom + shift_y),
@@ -957,7 +1010,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             scale,
             width as f32,
             height as f32,
-            (255, 70, 100),
+            preview_color(&settings.frame_color, (255, 70, 100)),
             pan,
         );
         let corner_radius = (settings.tool_diameter / 2.0)
