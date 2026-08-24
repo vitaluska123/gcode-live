@@ -8,7 +8,9 @@ mod app;
 mod exporter;
 mod frame;
 mod preview;
+mod preview_input;
 mod preview_renderer;
+mod scene;
 mod settings;
 mod viewport;
 

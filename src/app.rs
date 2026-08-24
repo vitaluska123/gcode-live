@@ -3,11 +3,38 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::viewport::Viewport;
-use crate::{exporter, frame, preview, preview_renderer, settings, MainWindow, UiSettings};
+use crate::{
+    exporter, frame, preview, preview_input, preview_renderer, scene::PreviewScene, settings,
+    MainWindow, UiSettings,
+};
 
 // Slint's text editor eagerly lays out its entire value.  Keep the editor
 // responsive and avoid renderer crashes when an otherwise valid TAP is huge.
 const MAX_SOURCE_EDITOR_BYTES: usize = 10 * 1024;
+
+/// Mutable model owned by the application. UI callbacks share this one state
+/// container instead of independently owning parts of the model.
+struct AppState {
+    preview_scene: Rc<PreviewScene>,
+    source_home: Rc<RefCell<Option<(f64, f64)>>>,
+    source_file_stem: Rc<RefCell<Option<String>>>,
+    viewport: Rc<RefCell<Viewport>>,
+    preview_input: Rc<RefCell<preview_input::PreviewInput>>,
+    settings: Rc<RefCell<settings::Settings>>,
+}
+
+impl AppState {
+    fn new(settings: settings::Settings) -> Self {
+        Self {
+            preview_scene: Rc::new(PreviewScene::new()),
+            source_home: Rc::new(RefCell::new(None)),
+            source_file_stem: Rc::new(RefCell::new(None)),
+            viewport: Rc::new(RefCell::new(Viewport::default())),
+            preview_input: Rc::new(RefCell::new(preview_input::PreviewInput::default())),
+            settings: Rc::new(RefCell::new(settings)),
+        }
+    }
+}
 
 fn preview_color(value: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
     let hex = value.trim().trim_start_matches('#');
@@ -81,16 +108,18 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     ui_settings.set_safe_area_preview_color(to_color(&settings.safe_area_color, (255, 70, 70)));
     ui_settings.set_frame_preview_color(to_color(&settings.frame_color, (255, 70, 100)));
 
-    // State management
-    let board_bounds = Rc::new(RefCell::new(None));
-    let frame_geometry = Rc::new(RefCell::new(None));
-    let source_home = Rc::new(RefCell::new(None));
-    let toolpath = Rc::new(RefCell::new(Vec::new()));
-    let rapid_path = Rc::new(RefCell::new(Vec::new()));
-    let source_file_stem = Rc::new(RefCell::new(None::<String>));
-    let viewport = Rc::new(RefCell::new(Viewport::default()));
-    let pointer_position = Rc::new(RefCell::new(None::<(f64, f64)>));
-    let current_settings = Rc::new(RefCell::new(settings));
+    // State management. AppState is the single owner of the mutable model;
+    // callbacks only retain references to the state fields they require.
+    let app_state = AppState::new(settings);
+    let board_bounds = app_state.preview_scene.board_bounds.clone();
+    let frame_geometry = app_state.preview_scene.frame_geometry.clone();
+    let source_home = app_state.source_home.clone();
+    let toolpath = app_state.preview_scene.toolpath.clone();
+    let rapid_path = app_state.preview_scene.rapid_path.clone();
+    let source_file_stem = app_state.source_file_stem.clone();
+    let viewport = app_state.viewport.clone();
+    let preview_input = app_state.preview_input.clone();
+    let current_settings = app_state.settings.clone();
 
     // Keep the Rust state and calculated frame in step with edits made in the UI.
     let weak_board = Rc::downgrade(&board_bounds);
@@ -419,28 +448,11 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             settings.material_offset_x,
             settings.material_offset_y,
         );
-        let (min_x, max_x, min_y, max_y) = data.world_bounds();
-        let content_width = max_x - min_x;
-        let content_height = max_y - min_y;
-        let base_scale = data.calculate_scale(width, height);
         let mut camera = *viewport_state.borrow();
-        let old_scale = base_scale * camera.zoom;
-        if old_scale <= 0.0 {
+        let Some(transform) = preview_input::PreviewTransform::new(data, width, height) else {
             return;
-        }
-        let world_x = min_x
-            + (mouse_x as f64 - (width as f64 - content_width * old_scale) / 2.0 - camera.pan_x)
-                / old_scale;
-        let world_y = min_y
-            + ((height as f64 + content_height * old_scale) / 2.0 + camera.pan_y - mouse_y as f64)
-                / old_scale;
-        camera.zoom_by(direction);
-        let new_scale = base_scale * camera.zoom;
-        camera.pan_x = mouse_x as f64
-            - (width as f64 - content_width * new_scale) / 2.0
-            - (world_x - min_x) * new_scale;
-        camera.pan_y = mouse_y as f64 - (height as f64 + content_height * new_scale) / 2.0
-            + (world_y - min_y) * new_scale;
+        };
+        transform.zoom_at(&mut camera, direction, mouse_x as f64, mouse_y as f64);
         *viewport_state.borrow_mut() = camera;
         window.invoke_update_preview();
     });
@@ -503,21 +515,17 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         };
         window.invoke_update_preview();
     });
-    let pointer_state = pointer_position.clone();
+    let input_state = preview_input.clone();
     main_window.on_begin_pan(move |x, y| {
-        *pointer_state.borrow_mut() = Some((x as f64, y as f64));
+        input_state.borrow_mut().begin_pan(x as f64, y as f64);
     });
-    let pointer_state = pointer_position.clone();
+    let input_state = preview_input.clone();
     let viewport_state = viewport.clone();
     let window_weak = main_window.as_weak();
     main_window.on_pan_preview(move |x, y| {
-        let current = (x as f64, y as f64);
-        if let Some(previous) = *pointer_state.borrow() {
-            viewport_state
-                .borrow_mut()
-                .pan_by(current.0 - previous.0, current.1 - previous.1);
-        }
-        *pointer_state.borrow_mut() = Some(current);
+        input_state
+            .borrow_mut()
+            .pan_to(&mut viewport_state.borrow_mut(), x as f64, y as f64);
         if let Some(window) = window_weak.upgrade() {
             window.invoke_update_preview();
         }
@@ -575,18 +583,14 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             settings.material_offset_x,
             settings.material_offset_y,
         );
-        let camera = *viewport.borrow();
-        let scale = data.calculate_scale(width, height) * camera.zoom;
-        if scale <= 0.0 {
+        let Some(transform) = preview_input::PreviewTransform::new(data, width, height) else {
             return;
-        }
-        let (min_x, max_x, min_y, max_y) = data.world_bounds();
-        let content_width = max_x - min_x;
-        let content_height = max_y - min_y;
-        let world_x = min_x
-            + (x as f64 - (width as f64 - content_width * scale) / 2.0 - camera.pan_x) / scale;
-        let world_y = min_y
-            + ((height as f64 + content_height * scale) / 2.0 + camera.pan_y - y as f64) / scale;
+        };
+        let Some((world_x, world_y)) =
+            transform.screen_to_world(*viewport.borrow(), x as f64, y as f64)
+        else {
+            return;
+        };
         let text = if settings.local_offset_enabled {
             format!(
                 "Локальные: X: {:.3}   Y: {:.3}\nГлобальные: X: {world_x:.3}   Y: {world_y:.3}",
