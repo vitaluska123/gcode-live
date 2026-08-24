@@ -1,4 +1,5 @@
-import { LineEdit, GroupBox, CheckBox, TabWidget } from "std-widgets.slint";
+import { GroupBox, CheckBox, TabWidget } from "std-widgets.slint";
+import { ApplyingLineEdit as LineEdit } from "applying_line_edit.slint";
 import { UiSettings } from "../globals.slint";
 import { Theme } from "../styles/theme.slint";
 
@@ -11,7 +12,7 @@ export component CalculationSettingsPanel inherits GroupBox {
         Tab { title: "Рамка"; VerticalLayout { spacing: 6px;
             HorizontalLayout { vertical-stretch: 0; Text { text: "Запас рамки X (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.offset_x + ""; preferred-width: Theme.field_width; accepted => { UiSettings.offset_x = self.text.to-float(); root.preview_changed(); } } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Запас рамки Y (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.offset_y + ""; preferred-width: Theme.field_width; accepted => { UiSettings.offset_y = self.text.to-float(); root.preview_changed(); } } }
-            Rectangle { vertical-stretch: 1; }
+            FocusScope { vertical-stretch: 1; }
         } }
         Tab { title: "Координаты"; VerticalLayout { spacing: 6px;
             CheckBox { vertical-stretch: 0; text: "Включить локальный ноль"; checked <=> UiSettings.local_offset_enabled; toggled => { root.preview_changed(); } }
@@ -25,14 +26,14 @@ export component CalculationSettingsPanel inherits GroupBox {
             Text { vertical-stretch: 0; text: "Мин. отступ до края текстолита"; wrap: word-wrap; color: Theme.secondary_text; }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ X (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.material_edge_margin_x + ""; preferred-width: Theme.field_width; accepted => { UiSettings.material_edge_margin_x = self.text.to-float(); root.preview_changed(); } } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ Y (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.material_edge_margin_y + ""; preferred-width: Theme.field_width; accepted => { UiSettings.material_edge_margin_y = self.text.to-float(); root.preview_changed(); } } }
-            Rectangle { vertical-stretch: 1; }
+            FocusScope { vertical-stretch: 1; }
         } }
         Tab { title: "Перемычки"; VerticalLayout { spacing: 6px;
             HorizontalLayout { vertical-stretch: 0; Text { text: "Ширина (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.tab_width + ""; preferred-width: Theme.field_width; accepted => { UiSettings.tab_width = self.text.to-float(); root.preview_changed(); } } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Минимум:"; vertical-alignment: center; } LineEdit { text: UiSettings.minimum_tabs + ""; preferred-width: Theme.field_width; accepted => { UiSettings.minimum_tabs = self.text.to-float(); root.preview_changed(); } } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Макс. промежуток (мм):"; vertical-alignment: center; } LineEdit { text: UiSettings.maximum_tab_gap + ""; preferred-width: Theme.field_width; accepted => { UiSettings.maximum_tab_gap = self.text.to-float(); root.preview_changed(); } } }
             CheckBox { vertical-stretch: 0; text: "Надрезать перемычки до 50% глубины"; checked <=> UiSettings.score_tabs; toggled => { root.preview_changed(); } }
-            Rectangle { vertical-stretch: 1; }
+            FocusScope { vertical-stretch: 1; }
         } }
     }
 }
@@ -51,7 +52,7 @@ export component RenderSettingsPanel inherits GroupBox {
             CheckBox { vertical-stretch: 0; text: "Штриховка зоны отступа"; checked <=> UiSettings.show_margin_hatch; toggled => { root.preview_changed(); } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет штриховки:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.margin_hatch_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.margin_hatch_preview_color; border-radius: 4px; } }
             Text { vertical-stretch: 0; text: "Цвета: #RRGGBB. Контуры — пунктир."; wrap: word-wrap; color: Theme.secondary_text; }
-            Rectangle { vertical-stretch: 1; }
+            FocusScope { vertical-stretch: 1; }
         } }
         Tab { title: "Глобальные"; VerticalLayout { spacing: 6px;
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет фона:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.background_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.background_preview_color; border-radius: 4px; } }
@@ -61,14 +62,14 @@ export component RenderSettingsPanel inherits GroupBox {
             CheckBox { vertical-stretch: 0; text: "Показывать оси"; checked <=> UiSettings.show_axes; toggled => { root.preview_changed(); } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет оси X:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.axis_x_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.axis_x_preview_color; border-radius: 4px; } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет оси Y:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.axis_y_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.axis_y_preview_color; border-radius: 4px; } }
-            Rectangle { vertical-stretch: 1; }
+            FocusScope { vertical-stretch: 1; }
         } }
         Tab { title: "Исходник"; VerticalLayout { spacing: 6px;
             CheckBox { vertical-stretch: 0; text: "Показывать контур обработки"; checked <=> UiSettings.show_toolpath; toggled => { root.preview_changed(); } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет контура обработки:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.toolpath_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.toolpath_preview_color; border-radius: 4px; } }
             CheckBox { vertical-stretch: 0; text: "Показывать быстрые перемещения"; checked <=> UiSettings.show_rapid; toggled => { root.preview_changed(); } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет быстрых перемещений:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.rapid_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.rapid_preview_color; border-radius: 4px; } }
-            Rectangle { vertical-stretch: 1; }
+            FocusScope { vertical-stretch: 1; }
         } }
         Tab { title: "Зона"; VerticalLayout { spacing: 6px;
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет рамки:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.frame_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.frame_preview_color; border-radius: 4px; } }
@@ -78,7 +79,7 @@ export component RenderSettingsPanel inherits GroupBox {
             CheckBox { vertical-stretch: 0; text: "Показывать перемычки"; checked <=> UiSettings.show_tabs; toggled => { root.preview_changed(); } }
             HorizontalLayout { vertical-stretch: 0; Text { text: "Цвет перемычек:"; vertical-alignment: center; } LineEdit { text <=> UiSettings.tab_color; preferred-width: 100px; accepted => { root.preview_changed(); } } Rectangle { horizontal-stretch: 1; } Rectangle { preferred-width: 3px; horizontal-stretch: 0; } Rectangle { width: 22px; height: 22px; horizontal-stretch: 0; vertical-stretch: 0; background: UiSettings.tab_preview_color; border-radius: 4px; } }
             Text { vertical-stretch: 0; text: "Рамка — сплошная; расчётный контур с перемычками — пунктир."; wrap: word-wrap; color: Theme.secondary_text; }
-            Rectangle { vertical-stretch: 1; }
+            FocusScope { vertical-stretch: 1; }
         } }
     }
 }

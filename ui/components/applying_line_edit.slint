@@ -1,0 +1,6 @@
+import { LineEdit } from "std-widgets.slint";
+
+/// A settings field commits its current value both on Enter and when focus moves away.
+export component ApplyingLineEdit inherits LineEdit {
+    changed has-focus => { if (!self.has-focus) { self.accepted(self.text); } }
+}

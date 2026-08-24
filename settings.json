@@ -47,7 +47,7 @@
         "color": "#ff4646"
       },
       "margin_hatch": {
-        "visible": true,
+        "visible": false,
         "color": "#ff4646"
       }
     },

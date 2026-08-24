@@ -203,6 +203,7 @@ pub(crate) fn install_settings_window_callbacks(
             settings.borrow().clone(),
         );
         *settings.borrow_mut() = new_settings.clone();
+        initialize_ui(settings_window.global::<UiSettings>(), &new_settings);
         initialize_ui(main_window.global::<UiSettings>(), &new_settings);
         main_window.invoke_update_preview();
     });
