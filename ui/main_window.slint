@@ -1,52 +1,152 @@
 import { Button, TabWidget } from "std-widgets.slint";
 import { UiSettings } from "globals.slint";
-import { SettingsPanel } from "components/settings_panel.slint";
 import { FileInformation } from "components/file_information.slint";
 import { PreviewPanel } from "components/preview_panel.slint";
-import { SourceGcodeEditor, FinalGcodeEditor } from "components/gcode_editor.slint";
+import {
+    SourceGcodeEditor,
+    FinalGcodeEditor,
+} from "components/gcode_editor.slint";
 
 export { UiSettings }
+export { SettingsWindow }from "settings_window.slint";
 
 export component MainWindow inherits Window {
-    min-width: 800px; min-height: 600px; title: "PCB Frame Generator";
-    in-out property<string> board_width: ""; in-out property<string> board_height: "";
-    in-out property<string> x_min: ""; in-out property<string> x_max: ""; in-out property<string> y_min: ""; in-out property<string> y_max: "";
-    in-out property<string> frame_width: ""; in-out property<string> frame_height: "";
-    in-out property<bool> file_loaded: false; in-out property<image> preview_image;
-    in-out property<float> preview_width: 1.0; in-out property<float> preview_height: 1.0;
-    in-out property<string> cursor_coordinates: "X: —   Y: —"; in-out property<int> active_tab: 0;
-    in-out property<string> source_gcode: ""; in-out property<bool> source_gcode_truncated: false; in-out property<string> final_gcode: "";
-    callback open_tap_file(); callback save_settings(); callback export_tap(); callback show_error(string); callback sync_settings(); callback update_preview(); callback render_preview(float, float) -> image; callback zoom_preview(int, float, float, float, float); callback fit_preview(); callback begin_pan(float, float); callback pan_preview(float, float); callback cursor_moved(float, float, float, float); callback apply_source_gcode(); callback apply_final_gcode();
+    min-width: 800px;
+    min-height: 600px;
+    title: "PCB Frame Generator";
+    in-out property <string> board_width: "";
+    in-out property <string> board_height: "";
+    in-out property <string> x_min: "";
+    in-out property <string> x_max: "";
+    in-out property <string> y_min: "";
+    in-out property <string> y_max: "";
+    in-out property <string> frame_width: "";
+    in-out property <string> frame_height: "";
+    in-out property <bool> file_loaded: false;
+    in-out property <image> preview_image;
+    in-out property <float> preview_width: 1.0;
+    in-out property <float> preview_height: 1.0;
+    in-out property <string> cursor_coordinates: "X: —   Y: —";
+    in-out property <int> active_tab: 0;
+    in-out property <string> source_gcode: "";
+    in-out property <bool> source_gcode_truncated: false;
+    in-out property <string> final_gcode: "";
+    callback open_tap_file();
+    callback open_settings();
+    callback save_settings();
+    callback export_tap();
+    callback show_error(string);
+    callback sync_settings();
+    callback update_preview();
+    callback render_preview(float, float) -> image;
+    callback zoom_preview(int, float, float, float, float);
+    callback fit_preview();
+    callback begin_pan(float, float);
+    callback pan_preview(float, float);
+    callback cursor_moved(float, float, float, float);
+    callback apply_source_gcode();
+    callback apply_final_gcode();
 
     update_preview => { sync_settings(); if (root.active_tab == 0) { preview_image = render_preview(root.preview_width, root.preview_height); } }
 
     MenuBar {
         Menu {
             title: "Файл";
-            MenuItem { title: "Открыть TAP…"; activated => { root.open_tap_file(); } }
-            MenuSeparator {}
-            MenuItem { title: "Экспортировать TAP…"; enabled: root.file_loaded; activated => { root.export_tap(); } }
+            MenuItem {
+                title: "Открыть TAP…";
+                activated => { root.open_tap_file(); }
+            }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Экспортировать TAP…";
+                enabled: root.file_loaded;
+                activated => { root.export_tap(); }
+            }
         }
+
         Menu {
             title: "Настройки";
-            MenuItem { title: "Сохранить настройки"; activated => { root.save_settings(); } }
+            MenuItem {
+                title: "Открыть настройки";
+                activated => { root.open_settings(); }
+            }
         }
     }
 
     VerticalLayout {
         spacing: 6px;
-        HorizontalLayout { padding: 12px; spacing: 12px;
-            VerticalLayout { preferred-width: 340px; spacing: 12px;
-                SettingsPanel { preview_changed => { root.update_preview(); } }
-                FileInformation { board_width: root.board_width; board_height: root.board_height; x_min: root.x_min; x_max: root.x_max; y_min: root.y_min; y_max: root.y_max; frame_width: root.frame_width; frame_height: root.frame_height; }
-                Rectangle { vertical-stretch: 1; }
-                Button { text: "Экспортировать TAP"; enabled: root.file_loaded; clicked => { root.export_tap(); } }
+        HorizontalLayout {
+            padding: 12px;
+            spacing: 12px;
+            VerticalLayout {
+                preferred-width: 340px;
+                spacing: 12px;
+                FileInformation {
+                    board_width: root.board_width;
+                    board_height: root.board_height;
+                    x_min: root.x_min;
+                    x_max: root.x_max;
+                    y_min: root.y_min;
+                    y_max: root.y_max;
+                    frame_width: root.frame_width;
+                    frame_height: root.frame_height;
+                }
+
+                Rectangle {
+                    vertical-stretch: 1;
+                }
+
+                Button {
+                    text: "Экспортировать TAP";
+                    enabled: root.file_loaded;
+                    clicked => { root.export_tap(); }
+                }
             }
-            VerticalLayout { horizontal-stretch: 1; spacing: 8px;
-                TabWidget { current-index <=> root.active_tab; changed current-index => { root.update_preview(); } horizontal-stretch: 1; vertical-stretch: 1;
-                    Tab { title: "Предпросмотр"; PreviewPanel { preview_image: root.preview_image; preview_width <=> root.preview_width; preview_height <=> root.preview_height; cursor_coordinates: root.cursor_coordinates; file_loaded: root.file_loaded; open_file => { root.open_tap_file(); } size_changed => { root.update_preview(); } begin_pan(x, y) => { root.begin_pan(x, y); } pan(x, y) => { root.pan_preview(x, y); } cursor_moved(x, y, width, height) => { root.cursor_moved(x, y, width, height); } zoom(direction, x, y, width, height) => { root.zoom_preview(direction, x, y, width, height); } fit => { root.fit_preview(); } } }
-                    Tab { title: "Исходный G-code"; SourceGcodeEditor { content <=> root.source_gcode; truncated: root.source_gcode_truncated; apply => { root.apply_source_gcode(); } } }
-                    Tab { title: "Финальный G-code"; FinalGcodeEditor { content <=> root.final_gcode; apply => { root.apply_final_gcode(); } } }
+
+            VerticalLayout {
+                horizontal-stretch: 1;
+                spacing: 8px;
+                TabWidget {
+                    current-index <=> root.active_tab;
+                    changed current-index => { root.update_preview(); }
+                    horizontal-stretch: 1;
+                    vertical-stretch: 1;
+                    Tab {
+                        title: "Предпросмотр";
+                        PreviewPanel {
+                            preview_image: root.preview_image;
+                            preview_width <=> root.preview_width;
+                            preview_height <=> root.preview_height;
+                            cursor_coordinates: root.cursor_coordinates;
+                            file_loaded: root.file_loaded;
+                            open_file => { root.open_tap_file(); }
+                            size_changed => { root.update_preview(); }
+                            begin_pan(x, y) => { root.begin_pan(x, y); }
+                            pan(x, y) => { root.pan_preview(x, y); }
+                            cursor_moved(x, y, width, height) => { root.cursor_moved(x, y, width, height); }
+                            zoom(direction, x, y, width, height) => { root.zoom_preview(direction, x, y, width, height); }
+                            fit => { root.fit_preview(); }
+                        }
+                    }
+
+                    Tab {
+                        title: "Исходный G-code";
+                        SourceGcodeEditor {
+                            content <=> root.source_gcode;
+                            truncated: root.source_gcode_truncated;
+                            apply => { root.apply_source_gcode(); }
+                        }
+                    }
+
+                    Tab {
+                        title: "Финальный G-code";
+                        FinalGcodeEditor {
+                            content <=> root.final_gcode;
+                            apply => { root.apply_final_gcode(); }
+                        }
+                    }
                 }
             }
         }

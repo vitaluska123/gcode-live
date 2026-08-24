@@ -5,7 +5,7 @@ use slint::ComponentHandle;
 use crate::{
     domain::{frame, settings::Settings},
     export::gcode as export_gcode,
-    MainWindow, UiSettings,
+    MainWindow, SettingsWindow, UiSettings,
 };
 
 /// Populate Slint's settings bridge from the persisted application settings.
@@ -131,6 +131,58 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &super::sta
             }
         }
         window.invoke_update_preview();
+    });
+}
+
+/// Connect the standalone settings window to the main UI and application state.
+pub(crate) fn install_settings_window_callbacks(
+    main_window: &MainWindow,
+    settings_window: &SettingsWindow,
+    app_state: &super::state::AppState,
+) {
+    let settings_window_weak = settings_window.as_weak();
+    let main_window_weak = main_window.as_weak();
+    let settings_weak = Rc::downgrade(&app_state.settings);
+    settings_window.on_preview_changed(move || {
+        let (Some(settings_window), Some(main_window), Some(settings)) = (
+            settings_window_weak.upgrade(),
+            main_window_weak.upgrade(),
+            settings_weak.upgrade(),
+        ) else {
+            return;
+        };
+
+        let new_settings = read_ui(
+            settings_window.global::<UiSettings>(),
+            settings.borrow().clone(),
+        );
+        *settings.borrow_mut() = new_settings.clone();
+        initialize_ui(main_window.global::<UiSettings>(), &new_settings);
+        main_window.invoke_update_preview();
+    });
+
+    let main_window_weak = main_window.as_weak();
+    settings_window.on_save_settings(move || {
+        let Some(main_window) = main_window_weak.upgrade() else {
+            return;
+        };
+        main_window.invoke_save_settings();
+    });
+
+    let settings_window = settings_window.clone_strong();
+    let settings_weak = Rc::downgrade(&app_state.settings);
+    let main_window_weak = main_window.as_weak();
+    main_window.on_open_settings(move || {
+        let (Some(settings), Some(main_window)) =
+            (settings_weak.upgrade(), main_window_weak.upgrade())
+        else {
+            return;
+        };
+        initialize_ui(settings_window.global::<UiSettings>(), &settings.borrow());
+        if let Err(error) = settings_window.show() {
+            main_window
+                .invoke_show_error(format!("Failed to open settings window: {error}").into());
+        }
     });
 }
 

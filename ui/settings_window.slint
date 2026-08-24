@@ -1,0 +1,30 @@
+import { Button } from "std-widgets.slint";
+import { RenderSettingsPanel } from "components/settings_panel.slint";
+
+export component SettingsWindow inherits Window {
+    min-width: 560px;
+    min-height: 500px;
+    preferred-width: 640px;
+    preferred-height: 560px;
+    title: "Настройки отрисовки";
+
+    callback preview_changed();
+    callback save_settings();
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+
+        RenderSettingsPanel {
+            horizontal-stretch: 1;
+            vertical-stretch: 1;
+            preview_changed => { root.preview_changed(); }
+        }
+
+        HorizontalLayout {
+            Rectangle { horizontal-stretch: 1; }
+            Button { text: "Сохранить настройки"; clicked => { root.save_settings(); } }
+            Button { text: "Закрыть"; clicked => { root.hide(); } }
+        }
+    }
+}
