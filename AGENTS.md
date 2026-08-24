@@ -35,7 +35,7 @@ Keep the following concerns separate:
 
 The UI must not contain business logic. Slint files are responsible for presenting the interface and forwarding events to Rust.
 
-`app.rs` must only compose and connect components. Do not put complex calculations, parsing, geometry, or rendering logic in it.
+The application composition module (`app.rs` or `app/mod.rs`) must only compose and connect components. Do not put complex calculations, parsing, geometry, rendering logic, or large callback implementations in it.
 
 ## Object Model
 
@@ -179,6 +179,38 @@ The renderer must only render `Scene`. Do not put settings changes, G-code parsi
 
 The architecture should permit replacing a software renderer with an OpenGL renderer without changing the data model or UI logic.
 
+## Safe Source Editing
+
+When editing existing source files, avoid fragile text-based replacement of large code blocks.
+
+Do not use Python, PowerShell, shell scripts, or similar tools to perform large `.replace()` operations on source code, especially when the matched text contains localized strings, comments, or other non-ASCII text.
+
+Prefer edits anchored to stable code structure, such as:
+
+- function or method signatures;
+- module declarations;
+- type or implementation blocks;
+- callback names;
+- nearby Rust syntax.
+
+When moving or refactoring code:
+
+1. Locate the implementation by its code structure rather than by matching the full textual contents of the block.
+2. Determine the complete syntactic boundaries of the function, closure, callback, `impl`, or module being changed.
+3. Modify only the required range.
+4. Preserve existing string literals, comments, line endings, and file encoding unless changing them is explicitly part of the task.
+5. Keep Rust and Slint source files encoded as UTF-8.
+
+If an automated patch or replacement fails to apply:
+
+- reread the current version of the file;
+- locate the target again using stable code identifiers;
+- create a smaller, localized edit;
+- do not repeatedly retry the same failed large text replacement;
+- do not work around the failure by rewriting the entire file unless genuinely necessary.
+
+Never leave both the old and new implementations in place after extracting code into another module.
+
 ## Changing Existing Code
 
 Before creating a new function:
@@ -207,6 +239,8 @@ Do not leave:
 - commented-out legacy code;
 - unused dependencies;
 - duplicate implementations.
+
+When code has been moved to another module, verify that the original implementation was actually removed and that only one source of truth remains.
 
 ## Implementation Scope
 
