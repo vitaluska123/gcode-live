@@ -3,30 +3,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    app_settings, app_state::AppState, exporter, frame, preview, preview_input, preview_renderer,
-    settings, viewport::Viewport, MainWindow, UiSettings,
+    app_file, app_settings, app_state::AppState, exporter, frame, preview, preview_input,
+    preview_renderer, settings, viewport::Viewport, MainWindow, UiSettings,
 };
-
-// Slint's text editor eagerly lays out its entire value.  Keep the editor
-// responsive and avoid renderer crashes when an otherwise valid TAP is huge.
-const MAX_SOURCE_EDITOR_BYTES: usize = 10 * 1024;
-
-fn source_gcode_for_editor(content: &str) -> (String, bool) {
-    if content.len() <= MAX_SOURCE_EDITOR_BYTES {
-        return (content.to_owned(), false);
-    }
-
-    let max_end = content.floor_char_boundary(MAX_SOURCE_EDITOR_BYTES);
-    let end = content[..max_end].rfind('\n').unwrap_or(max_end);
-    (
-        format!(
-            "{}\n\n; --- Display limited to the first {} KB of a large source file ---\n",
-            &content[..end],
-            MAX_SOURCE_EDITOR_BYTES / 1024
-        ),
-        true,
-    )
-}
 
 pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     // Load settings
@@ -201,7 +180,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         *home_rc.borrow_mut() = home;
         *path_rc.borrow_mut() = path;
         *rapid_rc.borrow_mut() = rapid;
-        let (source_gcode, source_gcode_truncated) = source_gcode_for_editor(&content);
+        let (source_gcode, source_gcode_truncated) = app_file::source_gcode_for_editor(&content);
         window.set_source_gcode(source_gcode.into());
         window.set_source_gcode_truncated(source_gcode_truncated);
         window.set_final_gcode(
