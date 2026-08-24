@@ -32,6 +32,8 @@ pub fn draw_grid(
     preview: &PreviewData,
     scale: f64,
     pan: (f64, f64),
+    line_color: (u8, u8, u8),
+    label_color: (u8, u8, u8),
 ) {
     let (width, height) = (buffer.width(), buffer.height());
     if scale <= 0.0 {
@@ -55,7 +57,8 @@ pub fn draw_grid(
             continue;
         }
         for y in 0..height {
-            pixels[(y * width + x as u32) as usize] = slint::Rgb8Pixel::new(42, 48, 58);
+            pixels[(y * width + x as u32) as usize] =
+                slint::Rgb8Pixel::new(line_color.0, line_color.1, line_color.2);
         }
         labels.push((x + 3, height as i32 - 11, index as f64 * step));
     }
@@ -67,16 +70,23 @@ pub fn draw_grid(
             continue;
         }
         for x in 0..width {
-            pixels[(y as u32 * width + x) as usize] = slint::Rgb8Pixel::new(42, 48, 58);
+            pixels[(y as u32 * width + x) as usize] =
+                slint::Rgb8Pixel::new(line_color.0, line_color.1, line_color.2);
         }
         labels.push((3, y - 9, index as f64 * step));
     }
     for (x, y, value) in labels {
-        draw_number(buffer, x, y, value);
+        draw_number(buffer, x, y, value, label_color);
     }
 }
 
-fn draw_number(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32, value: f64) {
+fn draw_number(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    x: i32,
+    y: i32,
+    value: f64,
+    color: (u8, u8, u8),
+) {
     let text = if value.abs() < 0.0001 {
         "0".to_owned()
     } else if value.abs() < 1.0 {
@@ -85,11 +95,17 @@ fn draw_number(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32,
         format!("{value:.0}")
     };
     for (offset, ch) in text.chars().enumerate() {
-        draw_glyph(buffer, x + offset as i32 * 4, y, ch);
+        draw_glyph(buffer, x + offset as i32 * 4, y, ch, color);
     }
 }
 
-fn draw_glyph(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32, ch: char) {
+fn draw_glyph(
+    buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
+    x: i32,
+    y: i32,
+    ch: char,
+    color: (u8, u8, u8),
+) {
     let glyph = match ch {
         '0' => [7, 5, 5, 5, 7],
         '1' => [2, 6, 2, 2, 7],
@@ -111,7 +127,8 @@ fn draw_glyph(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32, 
         for col in 0..3 {
             let (px, py) = (x + col, y + row as i32);
             if bits & (1 << (2 - col)) != 0 && px >= 0 && py >= 0 && px < width && py < height {
-                pixels[(py * width + px) as usize] = slint::Rgb8Pixel::new(150, 160, 175);
+                pixels[(py * width + px) as usize] =
+                    slint::Rgb8Pixel::new(color.0, color.1, color.2);
             }
         }
     }
@@ -124,7 +141,8 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
 
     // Dark editor-like background and a neutral grid.
     for pixel in buffer.make_mut_slice() {
-        *pixel = slint::Rgb8Pixel::new(14, 17, 22);
+        let color = preview_color(&frame.settings.background_color, (14, 17, 22));
+        *pixel = slint::Rgb8Pixel::new(color.0, color.1, color.2);
     }
     let Some(bounds) = frame.scene.board_bounds.as_ref() else {
         return slint::Image::from_rgb8(buffer);
@@ -168,7 +186,14 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
     let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
     let pan = (viewport.pan_x, viewport.pan_y);
     if settings.show_grid {
-        draw_grid(&mut buffer, &preview_data, scale, pan);
+        draw_grid(
+            &mut buffer,
+            &preview_data,
+            scale,
+            pan,
+            preview_color(&settings.grid_color, (42, 48, 58)),
+            preview_color(&settings.grid_label_color, (150, 160, 175)),
+        );
     }
     if settings.show_axes {
         axes(
@@ -178,6 +203,8 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
             width as f32,
             height as f32,
             pan,
+            preview_color(&settings.axis_x_color, (220, 70, 70)),
+            preview_color(&settings.axis_y_color, (70, 210, 120)),
         );
     }
     if settings.show_axes && settings.local_offset_enabled {
@@ -190,6 +217,8 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
             pan,
             shift_x,
             shift_y,
+            preview_color(&settings.axis_x_color, (220, 70, 70)),
+            preview_color(&settings.axis_y_color, (70, 210, 120)),
         );
     }
 
@@ -202,17 +231,19 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
         .iter()
         .map(|&(x, y)| (x + shift_x, y + shift_y))
         .collect();
-    polyline(
-        &mut buffer,
-        &shifted_path,
-        &preview_data,
-        scale,
-        width as f32,
-        height as f32,
-        (0, 210, 255),
-        2,
-        pan,
-    );
+    if settings.show_toolpath {
+        polyline(
+            &mut buffer,
+            &shifted_path,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            preview_color(&settings.toolpath_color, (0, 210, 255)),
+            2,
+            pan,
+        );
+    }
     let material = [
         (
             settings.material_offset_x - settings.material_width,
@@ -284,6 +315,7 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
             width as f32,
             height as f32,
             pan,
+            preview_color(&settings.margin_hatch_color, (255, 70, 70)),
         );
     }
     if settings.show_safe_area {
@@ -298,24 +330,26 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
             pan,
         );
     }
-    if let Some(expanded) = expanded {
-        let corners = [
-            (expanded.left + shift_x, expanded.bottom + shift_y),
-            (expanded.right + shift_x, expanded.bottom + shift_y),
-            (expanded.right + shift_x, expanded.top + shift_y),
-            (expanded.left + shift_x, expanded.top + shift_y),
-            (expanded.left + shift_x, expanded.bottom + shift_y),
-        ];
-        dotted_rectangle(
-            &mut buffer,
-            &corners,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            (255, 210, 0),
-            pan,
-        );
+    if settings.show_expanded_frame {
+        if let Some(expanded) = expanded {
+            let corners = [
+                (expanded.left + shift_x, expanded.bottom + shift_y),
+                (expanded.right + shift_x, expanded.bottom + shift_y),
+                (expanded.right + shift_x, expanded.top + shift_y),
+                (expanded.left + shift_x, expanded.top + shift_y),
+                (expanded.left + shift_x, expanded.bottom + shift_y),
+            ];
+            dotted_rectangle(
+                &mut buffer,
+                &corners,
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                preview_color(&settings.expanded_frame_color, (255, 210, 0)),
+                pan,
+            );
+        }
     }
     let anchored_corners = [
         (
@@ -333,36 +367,40 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
             frame_geometry.bottom + shift_y,
         ),
     ];
-    rectangle(
-        &mut buffer,
-        &anchored_corners,
-        &preview_data,
-        scale,
-        width as f32,
-        height as f32,
-        preview_color(&settings.frame_color, (255, 70, 100)),
-        pan,
-    );
+    if settings.show_frame {
+        rectangle(
+            &mut buffer,
+            &anchored_corners,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            preview_color(&settings.frame_color, (255, 70, 100)),
+            pan,
+        );
+    }
     let corner_radius = (settings.tool_diameter / 2.0)
         .min(1.0)
         .min(frame_geometry.width() / 4.0)
         .min(frame_geometry.height() / 4.0)
         .max(0.0);
-    for (left, right) in frame::top_tab_intervals(frame_geometry, corner_radius, settings) {
-        polyline(
-            &mut buffer,
-            &[
-                (left + shift_x, frame_geometry.top + shift_y),
-                (right + shift_x, frame_geometry.top + shift_y),
-            ],
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            (255, 220, 70),
-            4,
-            pan,
-        );
+    if settings.show_tabs {
+        for (left, right) in frame::top_tab_intervals(frame_geometry, corner_radius, settings) {
+            polyline(
+                &mut buffer,
+                &[
+                    (left + shift_x, frame_geometry.top + shift_y),
+                    (right + shift_x, frame_geometry.top + shift_y),
+                ],
+                &preview_data,
+                scale,
+                width as f32,
+                height as f32,
+                preview_color(&settings.tab_color, (255, 220, 70)),
+                4,
+                pan,
+            );
+        }
     }
     let shifted_rapid: Vec<_> = frame
         .scene
@@ -370,17 +408,19 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
         .iter()
         .map(|&(x, y)| (x + shift_x, y + shift_y))
         .collect();
-    polyline(
-        &mut buffer,
-        &shifted_rapid,
-        &preview_data,
-        scale,
-        width as f32,
-        height as f32,
-        (255, 190, 0),
-        1,
-        pan,
-    );
+    if settings.show_rapid {
+        polyline(
+            &mut buffer,
+            &shifted_rapid,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            preview_color(&settings.rapid_color, (255, 190, 0)),
+            1,
+            pan,
+        );
+    }
 
     slint::Image::from_rgb8(buffer)
 }
@@ -398,6 +438,7 @@ fn nice_grid_step(target: f64) -> f64 {
 }
 
 /// Draw world-space axes. X is red, Y is green, and both follow the camera.
+#[allow(clippy::too_many_arguments)] // Axis colors are independent render settings.
 pub fn axes(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     preview: &PreviewData,
@@ -405,8 +446,12 @@ pub fn axes(
     width: f32,
     height: f32,
     pan: (f64, f64),
+    x_color: (u8, u8, u8),
+    y_color: (u8, u8, u8),
 ) {
-    axes_at(buffer, preview, scale, width, height, pan, 0.0, 0.0, 1.0);
+    axes_at(
+        buffer, preview, scale, width, height, pan, 0.0, 0.0, 1.0, x_color, y_color,
+    );
 }
 
 /// Draw the local coordinate plane at its global origin. Half opacity keeps it
@@ -421,6 +466,8 @@ pub fn local_axes(
     pan: (f64, f64),
     origin_x_world: f64,
     origin_y_world: f64,
+    x_color: (u8, u8, u8),
+    y_color: (u8, u8, u8),
 ) {
     axes_at(
         buffer,
@@ -432,6 +479,8 @@ pub fn local_axes(
         origin_x_world,
         origin_y_world,
         0.5,
+        x_color,
+        y_color,
     );
 }
 
@@ -446,6 +495,8 @@ fn axes_at(
     origin_x_world: f64,
     origin_y_world: f64,
     opacity: f32,
+    x_color: (u8, u8, u8),
+    y_color: (u8, u8, u8),
 ) {
     let (origin_x, origin_y) =
         preview.world_to_screen(origin_x_world, origin_y_world, scale, width, height);
@@ -457,26 +508,8 @@ fn axes_at(
     let y_direction = (y_axis_end - origin_y).signum();
     let origin_x = origin_x + pan.0 as f32;
     let origin_y = origin_y + pan.1 as f32;
-    line_alpha(
-        buffer,
-        0.0,
-        origin_y,
-        width,
-        origin_y,
-        (220, 70, 70),
-        2,
-        opacity,
-    );
-    line_alpha(
-        buffer,
-        origin_x,
-        0.0,
-        origin_x,
-        height,
-        (70, 210, 120),
-        2,
-        opacity,
-    );
+    line_alpha(buffer, 0.0, origin_y, width, origin_y, x_color, 2, opacity);
+    line_alpha(buffer, origin_x, 0.0, origin_x, height, y_color, 2, opacity);
     // Arrow tips make the positive direction unambiguous.
     line_alpha(
         buffer,
@@ -484,7 +517,7 @@ fn axes_at(
         origin_y - 5.0,
         width,
         origin_y,
-        (220, 70, 70),
+        x_color,
         2,
         opacity,
     );
@@ -494,7 +527,7 @@ fn axes_at(
         10.0 * y_direction,
         origin_x,
         0.0,
-        (70, 210, 120),
+        y_color,
         2,
         opacity,
     );
@@ -579,6 +612,7 @@ pub fn hatched_margin(
     width: f32,
     height: f32,
     pan: (f64, f64),
+    color: (u8, u8, u8),
 ) {
     if inner_left <= outer_left
         || inner_right >= outer_right
@@ -632,7 +666,7 @@ pub fn hatched_margin(
             visible_top,
             start_x + visible_diagonal_height,
             visible_bottom,
-            (255, 70, 70),
+            color,
             1,
             0.25,
             (left, right, top, bottom),

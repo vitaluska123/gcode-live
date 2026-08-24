@@ -33,11 +33,42 @@ pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
     ui_settings.set_material_color(settings.material_color.clone().into());
     ui_settings.set_safe_area_color(settings.safe_area_color.clone().into());
     ui_settings.set_frame_color(settings.frame_color.clone().into());
+    ui_settings.set_background_color(settings.background_color.clone().into());
+    ui_settings.set_grid_color(settings.grid_color.clone().into());
+    ui_settings.set_grid_label_color(settings.grid_label_color.clone().into());
+    ui_settings.set_axis_x_color(settings.axis_x_color.clone().into());
+    ui_settings.set_axis_y_color(settings.axis_y_color.clone().into());
+    ui_settings.set_toolpath_color(settings.toolpath_color.clone().into());
+    ui_settings.set_rapid_color(settings.rapid_color.clone().into());
+    ui_settings.set_expanded_frame_color(settings.expanded_frame_color.clone().into());
+    ui_settings.set_tab_color(settings.tab_color.clone().into());
+    ui_settings.set_margin_hatch_color(settings.margin_hatch_color.clone().into());
+    ui_settings.set_show_toolpath(settings.show_toolpath);
+    ui_settings.set_show_rapid(settings.show_rapid);
+    ui_settings.set_show_expanded_frame(settings.show_expanded_frame);
+    ui_settings.set_show_frame(settings.show_frame);
+    ui_settings.set_show_tabs(settings.show_tabs);
     ui_settings
         .set_material_preview_color(preview_color(&settings.material_color, (190, 100, 255)));
     ui_settings
         .set_safe_area_preview_color(preview_color(&settings.safe_area_color, (255, 70, 70)));
     ui_settings.set_frame_preview_color(preview_color(&settings.frame_color, (255, 70, 100)));
+    ui_settings
+        .set_background_preview_color(preview_color(&settings.background_color, (14, 17, 22)));
+    ui_settings.set_grid_preview_color(preview_color(&settings.grid_color, (42, 48, 58)));
+    ui_settings
+        .set_grid_label_preview_color(preview_color(&settings.grid_label_color, (150, 160, 175)));
+    ui_settings.set_axis_x_preview_color(preview_color(&settings.axis_x_color, (220, 70, 70)));
+    ui_settings.set_axis_y_preview_color(preview_color(&settings.axis_y_color, (70, 210, 120)));
+    ui_settings.set_toolpath_preview_color(preview_color(&settings.toolpath_color, (0, 210, 255)));
+    ui_settings.set_rapid_preview_color(preview_color(&settings.rapid_color, (255, 190, 0)));
+    ui_settings.set_expanded_frame_preview_color(preview_color(
+        &settings.expanded_frame_color,
+        (255, 210, 0),
+    ));
+    ui_settings.set_tab_preview_color(preview_color(&settings.tab_color, (255, 220, 70)));
+    ui_settings
+        .set_margin_hatch_preview_color(preview_color(&settings.margin_hatch_color, (255, 70, 70)));
 }
 
 /// Copy UI values into a new settings value while retaining non-UI fields.
@@ -66,6 +97,21 @@ pub(crate) fn read_ui(ui_settings: UiSettings, source: Settings) -> Settings {
         material_color: ui_settings.get_material_color().to_string(),
         safe_area_color: ui_settings.get_safe_area_color().to_string(),
         frame_color: ui_settings.get_frame_color().to_string(),
+        background_color: ui_settings.get_background_color().to_string(),
+        grid_color: ui_settings.get_grid_color().to_string(),
+        grid_label_color: ui_settings.get_grid_label_color().to_string(),
+        axis_x_color: ui_settings.get_axis_x_color().to_string(),
+        axis_y_color: ui_settings.get_axis_y_color().to_string(),
+        toolpath_color: ui_settings.get_toolpath_color().to_string(),
+        rapid_color: ui_settings.get_rapid_color().to_string(),
+        expanded_frame_color: ui_settings.get_expanded_frame_color().to_string(),
+        tab_color: ui_settings.get_tab_color().to_string(),
+        margin_hatch_color: ui_settings.get_margin_hatch_color().to_string(),
+        show_toolpath: ui_settings.get_show_toolpath(),
+        show_rapid: ui_settings.get_show_rapid(),
+        show_expanded_frame: ui_settings.get_show_expanded_frame(),
+        show_frame: ui_settings.get_show_frame(),
+        show_tabs: ui_settings.get_show_tabs(),
         ..source
     }
 }

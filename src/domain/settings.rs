@@ -47,6 +47,36 @@ pub struct Settings {
     pub safe_area_color: String,
     #[serde(default = "default_frame_color")]
     pub frame_color: String,
+    #[serde(default = "default_background_color")]
+    pub background_color: String,
+    #[serde(default = "default_grid_color")]
+    pub grid_color: String,
+    #[serde(default = "default_grid_label_color")]
+    pub grid_label_color: String,
+    #[serde(default = "default_axis_x_color")]
+    pub axis_x_color: String,
+    #[serde(default = "default_axis_y_color")]
+    pub axis_y_color: String,
+    #[serde(default = "default_toolpath_color")]
+    pub toolpath_color: String,
+    #[serde(default = "default_rapid_color")]
+    pub rapid_color: String,
+    #[serde(default = "default_expanded_frame_color")]
+    pub expanded_frame_color: String,
+    #[serde(default = "default_tab_color")]
+    pub tab_color: String,
+    #[serde(default = "default_margin_hatch_color")]
+    pub margin_hatch_color: String,
+    #[serde(default = "default_true")]
+    pub show_toolpath: bool,
+    #[serde(default = "default_true")]
+    pub show_rapid: bool,
+    #[serde(default = "default_true")]
+    pub show_expanded_frame: bool,
+    #[serde(default = "default_true")]
+    pub show_frame: bool,
+    #[serde(default = "default_true")]
+    pub show_tabs: bool,
     /// Width of an uncut holding tab on the upper frame edge (mm).
     pub tab_width: f64,
     /// Minimum number of holding tabs.
@@ -95,6 +125,21 @@ impl Default for Settings {
             material_color: default_material_color(),
             safe_area_color: default_safe_area_color(),
             frame_color: default_frame_color(),
+            background_color: default_background_color(),
+            grid_color: default_grid_color(),
+            grid_label_color: default_grid_label_color(),
+            axis_x_color: default_axis_x_color(),
+            axis_y_color: default_axis_y_color(),
+            toolpath_color: default_toolpath_color(),
+            rapid_color: default_rapid_color(),
+            expanded_frame_color: default_expanded_frame_color(),
+            tab_color: default_tab_color(),
+            margin_hatch_color: default_margin_hatch_color(),
+            show_toolpath: true,
+            show_rapid: true,
+            show_expanded_frame: true,
+            show_frame: true,
+            show_tabs: true,
             tab_width: 3.0,
             minimum_tabs: 3,
             maximum_tab_gap: 20.0,
@@ -192,6 +237,36 @@ fn default_safe_area_color() -> String {
 }
 fn default_frame_color() -> String {
     "#ff4664".into()
+}
+fn default_background_color() -> String {
+    "#0e1116".into()
+}
+fn default_grid_color() -> String {
+    "#2a303a".into()
+}
+fn default_grid_label_color() -> String {
+    "#96a0af".into()
+}
+fn default_axis_x_color() -> String {
+    "#dc4646".into()
+}
+fn default_axis_y_color() -> String {
+    "#46d278".into()
+}
+fn default_toolpath_color() -> String {
+    "#00d2ff".into()
+}
+fn default_rapid_color() -> String {
+    "#ffbe00".into()
+}
+fn default_expanded_frame_color() -> String {
+    "#ffd200".into()
+}
+fn default_tab_color() -> String {
+    "#ffdc46".into()
+}
+fn default_margin_hatch_color() -> String {
+    "#ff4646".into()
 }
 
 impl Settings {
