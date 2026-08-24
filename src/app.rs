@@ -667,9 +667,6 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     // Export TAP handler
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
-    let weak_toolpath = Rc::downgrade(&toolpath);
-    let weak_rapid_path = Rc::downgrade(&rapid_path);
-    let weak_viewport = Rc::downgrade(&viewport);
     let weak_settings = Rc::downgrade(&current_settings);
     let weak_home = Rc::downgrade(&source_home);
     let weak_source_file_stem = Rc::downgrade(&source_file_stem);
@@ -762,302 +759,31 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Preview render handler - creates a simple line representation
+    // The UI callback only gathers the current model snapshot. The software
+    // backend owns all rasterization details and can later be replaced.
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_toolpath = Rc::downgrade(&toolpath);
+    let weak_rapid_path = Rc::downgrade(&rapid_path);
+    let weak_viewport = Rc::downgrade(&viewport);
     let weak_settings = Rc::downgrade(&current_settings);
-    let window_weak = main_window.as_weak();
-
     main_window.on_render_preview(move |width, height| {
-        // Camera panning is expressed in canvas pixels, so the software buffer
-        // must use the exact canvas size. Downscaling it here causes dragging
-        // and the displayed image to move by different amounts after resize.
         let width = width.max(1.0).round() as u32;
         let height = height.max(1.0).round() as u32;
-
-        if width == 0 || height == 0 {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
-        }
-
-        let Some(_window) = window_weak.upgrade() else {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(1, 1));
-        };
-
-        let Some(board_rc) = weak_board.upgrade() else {
+        let (Some(board), Some(frame), Some(settings), Some(path), Some(rapid), Some(viewport)) = (
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_settings.upgrade(),
+            weak_toolpath.upgrade(),
+            weak_rapid_path.upgrade(),
+            weak_viewport.upgrade(),
+        ) else {
             return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
         };
-        let Some(frame_rc) = weak_frame.upgrade() else {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
-        };
-        let Some(settings_rc) = weak_settings.upgrade() else {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
-        };
-        let Some(path_rc) = weak_toolpath.upgrade() else {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
-        };
-        let Some(rapid_rc) = weak_rapid_path.upgrade() else {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
-        };
-        let Some(viewport_rc) = weak_viewport.upgrade() else {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
-        };
-
-        let mut buffer = SharedPixelBuffer::<slint::Rgb8Pixel>::new(width, height);
-
-        // Dark editor-like background and a neutral grid.
-        for pixel in buffer.make_mut_slice() {
-            *pixel = slint::Rgb8Pixel::new(14, 17, 22);
-        }
-        let board_borrow = board_rc.borrow();
-        let Some(bounds) = board_borrow.as_ref() else {
-            return slint::Image::from_rgb8(buffer);
-        };
-
-        let frame_borrow = frame_rc.borrow();
-        let Some(frame) = frame_borrow.as_ref() else {
-            return slint::Image::from_rgb8(buffer);
-        };
-
-        let settings = settings_rc.borrow().clone();
-        let (shift_x, shift_y) = settings.local_offset();
-        let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
-        let preview_left = expanded
-            .as_ref()
-            .map_or(frame.left, |value| frame.left.min(value.left));
-        let preview_right = expanded
-            .as_ref()
-            .map_or(frame.right, |value| frame.right.max(value.right));
-        let preview_bottom = expanded
-            .as_ref()
-            .map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
-        let preview_top = expanded
-            .as_ref()
-            .map_or(frame.top, |value| frame.top.max(value.top));
-        let preview_data = preview::PreviewData::from_bounds_with_material(
-            bounds.x_min + shift_x,
-            bounds.x_max + shift_x,
-            bounds.y_min + shift_y,
-            bounds.y_max + shift_y,
-            preview_left + shift_x,
-            preview_right + shift_x,
-            preview_bottom + shift_y,
-            preview_top + shift_y,
-            settings.material_width,
-            settings.material_height,
-            settings.material_offset_x,
-            settings.material_offset_y,
-        );
-
-        let viewport = *viewport_rc.borrow();
-        let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
-        let pan = (viewport.pan_x, viewport.pan_y);
-        if settings.show_grid {
-            preview_renderer::draw_grid(&mut buffer, &preview_data, scale, pan);
-        }
-        if settings.show_axes {
-            preview_renderer::axes(
-                &mut buffer,
-                &preview_data,
-                scale,
-                width as f32,
-                height as f32,
-                pan,
-            );
-        }
-        if settings.show_axes && settings.local_offset_enabled {
-            preview_renderer::local_axes(
-                &mut buffer,
-                &preview_data,
-                scale,
-                width as f32,
-                height as f32,
-                pan,
-                shift_x,
-                shift_y,
-            );
-        }
-
-        // Draw board (blue) - thicker lines
-
-        // Draw frame (red) - thicker lines
-        let path = path_rc.borrow();
-        let shifted_path: Vec<_> = path
-            .iter()
-            .map(|&(x, y)| (x + shift_x, y + shift_y))
-            .collect();
-        preview_renderer::polyline(
-            &mut buffer,
-            &shifted_path,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            (0, 210, 255),
-            2,
-            pan,
-        );
-        let material = [
-            (
-                settings.material_offset_x - settings.material_width,
-                settings.material_offset_y,
-            ),
-            (settings.material_offset_x, settings.material_offset_y),
-            (
-                settings.material_offset_x,
-                settings.material_offset_y + settings.material_height,
-            ),
-            (
-                settings.material_offset_x - settings.material_width,
-                settings.material_offset_y + settings.material_height,
-            ),
-            (
-                settings.material_offset_x - settings.material_width,
-                settings.material_offset_y,
-            ),
-        ];
-        if settings.show_material {
-            preview_renderer::dotted_rectangle(
-                &mut buffer,
-                &material,
-                &preview_data,
-                scale,
-                width as f32,
-                height as f32,
-                preview_color(&settings.material_color, (190, 100, 255)),
-                pan,
-            );
-        }
-        let edge_margin_x = settings.material_edge_margin_x.max(0.0);
-        let edge_margin_y = settings.material_edge_margin_y.max(0.0);
-        let safe_area = [
-            (
-                settings.material_offset_x - settings.material_width + edge_margin_x,
-                settings.material_offset_y + edge_margin_y,
-            ),
-            (
-                settings.material_offset_x - edge_margin_x,
-                settings.material_offset_y + edge_margin_y,
-            ),
-            (
-                settings.material_offset_x - edge_margin_x,
-                settings.material_offset_y + settings.material_height - edge_margin_y,
-            ),
-            (
-                settings.material_offset_x - settings.material_width + edge_margin_x,
-                settings.material_offset_y + settings.material_height - edge_margin_y,
-            ),
-            (
-                settings.material_offset_x - settings.material_width + edge_margin_x,
-                settings.material_offset_y + edge_margin_y,
-            ),
-        ];
-        if settings.show_margin_hatch {
-            preview_renderer::hatched_margin(
-                &mut buffer,
-                settings.material_offset_x - settings.material_width,
-                settings.material_offset_x,
-                settings.material_offset_y,
-                settings.material_offset_y + settings.material_height,
-                settings.material_offset_x - settings.material_width + edge_margin_x,
-                settings.material_offset_x - edge_margin_x,
-                settings.material_offset_y + edge_margin_y,
-                settings.material_offset_y + settings.material_height - edge_margin_y,
-                &preview_data,
-                scale,
-                width as f32,
-                height as f32,
-                pan,
-            );
-        }
-        if settings.show_safe_area {
-            preview_renderer::dotted_rectangle(
-                &mut buffer,
-                &safe_area,
-                &preview_data,
-                scale,
-                width as f32,
-                height as f32,
-                preview_color(&settings.safe_area_color, (255, 70, 70)),
-                pan,
-            );
-        }
-        if let Some(expanded) = expanded {
-            let corners = [
-                (expanded.left + shift_x, expanded.bottom + shift_y),
-                (expanded.right + shift_x, expanded.bottom + shift_y),
-                (expanded.right + shift_x, expanded.top + shift_y),
-                (expanded.left + shift_x, expanded.top + shift_y),
-                (expanded.left + shift_x, expanded.bottom + shift_y),
-            ];
-            preview_renderer::dotted_rectangle(
-                &mut buffer,
-                &corners,
-                &preview_data,
-                scale,
-                width as f32,
-                height as f32,
-                (255, 210, 0),
-                pan,
-            );
-        }
-        let anchored_corners = [
-            (frame.left + shift_x, frame.bottom + shift_y),
-            (frame.right + shift_x, frame.bottom + shift_y),
-            (frame.right + shift_x, frame.top + shift_y),
-            (frame.left + shift_x, frame.top + shift_y),
-            (frame.left + shift_x, frame.bottom + shift_y),
-        ];
-        preview_renderer::rectangle(
-            &mut buffer,
-            &anchored_corners,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            preview_color(&settings.frame_color, (255, 70, 100)),
-            pan,
-        );
-        let corner_radius = (settings.tool_diameter / 2.0)
-            .min(1.0)
-            .min(frame.width() / 4.0)
-            .min(frame.height() / 4.0)
-            .max(0.0);
-        for (left, right) in frame::top_tab_intervals(frame, corner_radius, &settings) {
-            preview_renderer::polyline(
-                &mut buffer,
-                &[
-                    (left + shift_x, frame.top + shift_y),
-                    (right + shift_x, frame.top + shift_y),
-                ],
-                &preview_data,
-                scale,
-                width as f32,
-                height as f32,
-                (255, 220, 70),
-                4,
-                pan,
-            );
-        }
-        let rapid = rapid_rc.borrow();
-        let shifted_rapid: Vec<_> = rapid
-            .iter()
-            .map(|&(x, y)| (x + shift_x, y + shift_y))
-            .collect();
-        preview_renderer::polyline(
-            &mut buffer,
-            &shifted_rapid,
-            &preview_data,
-            scale,
-            width as f32,
-            height as f32,
-            (255, 190, 0),
-            1,
-            pan,
-        );
-
-        slint::Image::from_rgb8(buffer)
+        preview_renderer::render_software(
+            width, height, &board, &frame, &settings, &path, &rapid, &viewport,
+        )
     });
-
     main_window.run()?;
     Ok(())
 }

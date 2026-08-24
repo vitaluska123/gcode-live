@@ -2,7 +2,20 @@
 //! It will be replaced by the OpenGL backend without touching UI callbacks.
 
 use crate::preview::PreviewData;
+use crate::{frame, preview};
 use slint::SharedPixelBuffer;
+
+fn preview_color(value: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
+    let hex = value.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return fallback;
+    }
+    let parse = |range| u8::from_str_radix(&hex[range], 16).ok();
+    match (parse(0..2), parse(2..4), parse(4..6)) {
+        (Some(r), Some(g), Some(b)) => (r, g, b),
+        _ => fallback,
+    }
+}
 
 pub fn draw_grid(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
@@ -92,6 +105,272 @@ fn draw_glyph(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32, 
             }
         }
     }
+}
+
+pub fn render_software(
+    width: u32,
+    height: u32,
+    board_rc: &std::cell::RefCell<Option<crate::frame::BoardBounds>>,
+    frame_rc: &std::cell::RefCell<Option<crate::frame::FrameGeometry>>,
+    settings_rc: &std::cell::RefCell<crate::settings::Settings>,
+    path_rc: &std::cell::RefCell<Vec<(f64, f64)>>,
+    rapid_rc: &std::cell::RefCell<Vec<(f64, f64)>>,
+    viewport_rc: &std::cell::RefCell<crate::viewport::Viewport>,
+) -> slint::Image {
+    let mut buffer = SharedPixelBuffer::<slint::Rgb8Pixel>::new(width, height);
+
+    // Dark editor-like background and a neutral grid.
+    for pixel in buffer.make_mut_slice() {
+        *pixel = slint::Rgb8Pixel::new(14, 17, 22);
+    }
+    let board_borrow = board_rc.borrow();
+    let Some(bounds) = board_borrow.as_ref() else {
+        return slint::Image::from_rgb8(buffer);
+    };
+
+    let frame_borrow = frame_rc.borrow();
+    let Some(frame) = frame_borrow.as_ref() else {
+        return slint::Image::from_rgb8(buffer);
+    };
+
+    let settings = settings_rc.borrow().clone();
+    let (shift_x, shift_y) = settings.local_offset();
+    let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
+    let preview_left = expanded
+        .as_ref()
+        .map_or(frame.left, |value| frame.left.min(value.left));
+    let preview_right = expanded
+        .as_ref()
+        .map_or(frame.right, |value| frame.right.max(value.right));
+    let preview_bottom = expanded
+        .as_ref()
+        .map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
+    let preview_top = expanded
+        .as_ref()
+        .map_or(frame.top, |value| frame.top.max(value.top));
+    let preview_data = preview::PreviewData::from_bounds_with_material(
+        bounds.x_min + shift_x,
+        bounds.x_max + shift_x,
+        bounds.y_min + shift_y,
+        bounds.y_max + shift_y,
+        preview_left + shift_x,
+        preview_right + shift_x,
+        preview_bottom + shift_y,
+        preview_top + shift_y,
+        settings.material_width,
+        settings.material_height,
+        settings.material_offset_x,
+        settings.material_offset_y,
+    );
+
+    let viewport = *viewport_rc.borrow();
+    let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
+    let pan = (viewport.pan_x, viewport.pan_y);
+    if settings.show_grid {
+        draw_grid(&mut buffer, &preview_data, scale, pan);
+    }
+    if settings.show_axes {
+        axes(
+            &mut buffer,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            pan,
+        );
+    }
+    if settings.show_axes && settings.local_offset_enabled {
+        local_axes(
+            &mut buffer,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            pan,
+            shift_x,
+            shift_y,
+        );
+    }
+
+    // Draw board (blue) - thicker lines
+
+    // Draw frame (red) - thicker lines
+    let path = path_rc.borrow();
+    let shifted_path: Vec<_> = path
+        .iter()
+        .map(|&(x, y)| (x + shift_x, y + shift_y))
+        .collect();
+    polyline(
+        &mut buffer,
+        &shifted_path,
+        &preview_data,
+        scale,
+        width as f32,
+        height as f32,
+        (0, 210, 255),
+        2,
+        pan,
+    );
+    let material = [
+        (
+            settings.material_offset_x - settings.material_width,
+            settings.material_offset_y,
+        ),
+        (settings.material_offset_x, settings.material_offset_y),
+        (
+            settings.material_offset_x,
+            settings.material_offset_y + settings.material_height,
+        ),
+        (
+            settings.material_offset_x - settings.material_width,
+            settings.material_offset_y + settings.material_height,
+        ),
+        (
+            settings.material_offset_x - settings.material_width,
+            settings.material_offset_y,
+        ),
+    ];
+    if settings.show_material {
+        dotted_rectangle(
+            &mut buffer,
+            &material,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            preview_color(&settings.material_color, (190, 100, 255)),
+            pan,
+        );
+    }
+    let edge_margin_x = settings.material_edge_margin_x.max(0.0);
+    let edge_margin_y = settings.material_edge_margin_y.max(0.0);
+    let safe_area = [
+        (
+            settings.material_offset_x - settings.material_width + edge_margin_x,
+            settings.material_offset_y + edge_margin_y,
+        ),
+        (
+            settings.material_offset_x - edge_margin_x,
+            settings.material_offset_y + edge_margin_y,
+        ),
+        (
+            settings.material_offset_x - edge_margin_x,
+            settings.material_offset_y + settings.material_height - edge_margin_y,
+        ),
+        (
+            settings.material_offset_x - settings.material_width + edge_margin_x,
+            settings.material_offset_y + settings.material_height - edge_margin_y,
+        ),
+        (
+            settings.material_offset_x - settings.material_width + edge_margin_x,
+            settings.material_offset_y + edge_margin_y,
+        ),
+    ];
+    if settings.show_margin_hatch {
+        hatched_margin(
+            &mut buffer,
+            settings.material_offset_x - settings.material_width,
+            settings.material_offset_x,
+            settings.material_offset_y,
+            settings.material_offset_y + settings.material_height,
+            settings.material_offset_x - settings.material_width + edge_margin_x,
+            settings.material_offset_x - edge_margin_x,
+            settings.material_offset_y + edge_margin_y,
+            settings.material_offset_y + settings.material_height - edge_margin_y,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            pan,
+        );
+    }
+    if settings.show_safe_area {
+        dotted_rectangle(
+            &mut buffer,
+            &safe_area,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            preview_color(&settings.safe_area_color, (255, 70, 70)),
+            pan,
+        );
+    }
+    if let Some(expanded) = expanded {
+        let corners = [
+            (expanded.left + shift_x, expanded.bottom + shift_y),
+            (expanded.right + shift_x, expanded.bottom + shift_y),
+            (expanded.right + shift_x, expanded.top + shift_y),
+            (expanded.left + shift_x, expanded.top + shift_y),
+            (expanded.left + shift_x, expanded.bottom + shift_y),
+        ];
+        dotted_rectangle(
+            &mut buffer,
+            &corners,
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            (255, 210, 0),
+            pan,
+        );
+    }
+    let anchored_corners = [
+        (frame.left + shift_x, frame.bottom + shift_y),
+        (frame.right + shift_x, frame.bottom + shift_y),
+        (frame.right + shift_x, frame.top + shift_y),
+        (frame.left + shift_x, frame.top + shift_y),
+        (frame.left + shift_x, frame.bottom + shift_y),
+    ];
+    rectangle(
+        &mut buffer,
+        &anchored_corners,
+        &preview_data,
+        scale,
+        width as f32,
+        height as f32,
+        preview_color(&settings.frame_color, (255, 70, 100)),
+        pan,
+    );
+    let corner_radius = (settings.tool_diameter / 2.0)
+        .min(1.0)
+        .min(frame.width() / 4.0)
+        .min(frame.height() / 4.0)
+        .max(0.0);
+    for (left, right) in frame::top_tab_intervals(frame, corner_radius, &settings) {
+        polyline(
+            &mut buffer,
+            &[
+                (left + shift_x, frame.top + shift_y),
+                (right + shift_x, frame.top + shift_y),
+            ],
+            &preview_data,
+            scale,
+            width as f32,
+            height as f32,
+            (255, 220, 70),
+            4,
+            pan,
+        );
+    }
+    let rapid = rapid_rc.borrow();
+    let shifted_rapid: Vec<_> = rapid
+        .iter()
+        .map(|&(x, y)| (x + shift_x, y + shift_y))
+        .collect();
+    polyline(
+        &mut buffer,
+        &shifted_rapid,
+        &preview_data,
+        scale,
+        width as f32,
+        height as f32,
+        (255, 190, 0),
+        1,
+        pan,
+    );
+
+    slint::Image::from_rgb8(buffer)
 }
 
 fn nice_grid_step(target: f64) -> f64 {
