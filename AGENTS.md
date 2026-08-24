@@ -1,38 +1,47 @@
-# AGENTS.md — правила проекта
+# AGENTS.md
 
-## Общие правила
+## Project Overview
 
-Это desktop-приложение на Rust + Slint для работы с G-code и подготовки траекторий для CNC.
+This is a desktop application written in Rust and Slint for working with G-code and preparing CNC toolpaths.
 
-При изменении проекта сохраняй существующую архитектуру и разделение ответственности.
+When modifying the project, preserve the existing architecture and separation of responsibilities. Do not rewrite large areas of the project unless the task genuinely requires it.
 
-Не переписывай большие части проекта без необходимости.
+Before changing code, inspect the related modules and reuse existing types, functions, and patterns whenever practical.
 
-Перед изменением кода сначала изучи связанные модули и используй уже существующие структуры и функции.
+## Task Workflow
 
-## Архитектура
+Follow this workflow for every task:
 
-Разделяй:
+1. Analyze the request and the relevant codebase before making changes.
+2. Identify the affected modules, the appropriate home for each responsibility, and reusable existing structures.
+3. If information needed for a correct implementation is missing or ambiguous, compile **all** necessary clarifying questions and ask them together in one message. Do not ask questions one at a time when they can be anticipated up front.
+4. Once sufficient information is available, create a concise, actionable implementation plan.
+5. Execute the plan immediately. Do not wait for additional confirmation unless the task requires new authority, introduces material risk, or changes scope.
+6. Validate the implementation and report the outcome.
+
+For straightforward tasks, state the analysis and plan concisely, then proceed without unnecessary questions.
+
+## Architecture
+
+Keep the following concerns separate:
 
 - UI;
-- состояние приложения;
-- бизнес-логику;
-- геометрию;
-- рендеринг;
-- ввод пользователя;
-- работу с файлами.
+- application state;
+- business logic;
+- geometry;
+- rendering;
+- user input;
+- file operations.
 
-UI не должен содержать бизнес-логику.
+The UI must not contain business logic. Slint files are responsible for presenting the interface and forwarding events to Rust.
 
-Slint-файлы должны отвечать за отображение интерфейса и передачу событий в Rust.
+`app.rs` must only compose and connect components. Do not put complex calculations, parsing, geometry, or rendering logic in it.
 
-`app.rs` должен только связывать компоненты между собой. Не помещай туда сложные вычисления, парсинг, геометрию или рендеринг.
+## Object Model
 
-## Объектная модель
+Prefer cohesive structs with methods over collections of unrelated functions and global state.
 
-Предпочитай структуры с методами вместо набора несвязанных функций и глобального состояния.
-
-Хорошо:
+Good:
 
 ```rust
 struct Viewport {
@@ -42,77 +51,51 @@ struct Viewport {
 }
 
 impl Viewport {
-    fn pan_by(&mut self, dx: f64, dy: f64) { ... }
+    fn pan_by(&mut self, dx: f64, dy: f64) { /* ... */ }
 
-    fn zoom_at(&mut self, x: f64, y: f64, factor: f64) { ... }
+    fn zoom_at(&mut self, x: f64, y: f64, factor: f64) { /* ... */ }
 
-    fn screen_to_world(&self, ...) -> Point { ... }
+    fn screen_to_world(&self, /* ... */) -> Point { /* ... */ }
 }
 ```
 
-Плохо:
+Avoid related free functions with many shared parameters, such as `calculate_pan`, `calculate_zoom`, and `convert_mouse_coordinates`.
 
-```rust
-fn calculate_pan(...)
-fn calculate_zoom(...)
-fn convert_mouse_coordinates(...)
-```
+If several values are always used together, model them with a dedicated type.
 
-с большим количеством связанных параметров.
+## No Hard-Coding
 
-Если несколько значений всегда используются вместе — создай для них отдельный тип.
+Do not place magic numbers in business logic.
 
-## Запрет на хардкод
-
-Не размещай магические числа внутри бизнес-логики.
-
-Плохо:
+Avoid:
 
 ```rust
 if distance < 20.0 {
-    ...
+    // ...
 }
 ```
 
-Хорошо:
+Prefer:
 
 ```rust
 const HIT_TEST_TOLERANCE_PX: f64 = 20.0;
 ```
 
-или настройка соответствующей структуры.
+or a suitable configuration field.
 
-Цвета, размеры элементов интерфейса и параметры отображения должны находиться в одном месте.
+Keep colors, UI dimensions, and display parameters centralized.
 
-## Размер функций
+## Function and Module Size
 
-Функция должна выполнять одну понятную задачу.
+A function should perform one clear task. Split it when it is roughly longer than 40–60 lines, deeply nested, or performs multiple independent actions. Do not fragment simple code artificially.
 
-Если функция:
+Do not let a single file become an oversized module. When a file grows beyond roughly 400–600 lines and contains distinct responsibilities, split it accordingly. In particular, do not grow `app.rs` when a separate module is appropriate.
 
-- длиннее примерно 40–60 строк;
-- имеет много уровней вложенности;
-- выполняет несколько независимых действий;
+## State Management
 
-раздели её на несколько функций или вынеси ответственность в отдельную структуру.
+Do not introduce new global state.
 
-Не дроби простой код искусственно.
-
-## Размер модулей
-
-Не превращай один файл в огромный модуль.
-
-Если файл становится заметно больше примерно 400–600 строк и содержит несколько отдельных сущностей, раздели его по ответственности.
-
-Особенно не расширяй `app.rs`, если новую функцию можно оформить отдельным модулем.
-
-## Состояние
-
-Не создавай новое глобальное состояние.
-
-Не используй множество отдельных `Rc<RefCell<...>>`, если эти значения логически принадлежат одному объекту.
-
-Предпочитай:
+Avoid many separate `Rc<RefCell<...>>` values when they logically belong to one object. Prefer a cohesive state type:
 
 ```rust
 struct AppState {
@@ -122,52 +105,42 @@ struct AppState {
 }
 ```
 
-вместо большого количества независимых контейнеров состояния.
+## Error Handling
 
-## Ошибки
+Do not use `unwrap()` or `expect()` for failures that can result from:
 
-Не используй `unwrap()` и `expect()` там, где ошибка может возникнуть из-за:
+- user files;
+- user input;
+- operating-system state;
+- drivers;
+- the file system.
 
-- пользовательского файла;
-- ввода пользователя;
-- состояния ОС;
-- драйвера;
-- файловой системы.
+Handle such errors gracefully and present useful feedback to the user.
 
-Такие ошибки должны нормально обрабатываться и показываться пользователю.
+`unwrap()` is acceptable only for internal invariants whose violation indicates a programmer error.
 
-`unwrap()` допустим только для внутренних инвариантов, нарушение которых означает ошибку программиста.
+## Compatibility and Dependencies
 
-## Совместимость
+Do not add dependencies or APIs that reduce existing platform support without a clear need.
 
-Не добавляй зависимость или API, который ухудшает существующую поддержку платформ, без явной необходимости.
+Before adding a dependency, check:
 
-Перед добавлением dependency проверь:
+- why it is needed;
+- whether existing dependencies can solve the problem;
+- supported Windows versions;
+- its effect on project size and complexity.
 
-- зачем она нужна;
-- можно ли решить задачу существующими зависимостями;
-- поддерживаемые версии Windows;
-- влияние на размер и сложность проекта.
+Do not update the Rust edition, Slint, or other major dependencies without a separate reason.
 
-Не обновляй Rust edition, Slint или другие крупные зависимости без отдельной причины.
+## Performance and Coordinates
 
-## Производительность
+Do not perform expensive calculations on every mouse movement when results can be cached.
 
-Не выполняй тяжёлые вычисления при каждом движении мыши, если результат можно закэшировать.
+Do not recreate geometry during pan or zoom. Store geometry in world coordinates. `Viewport` is responsible only for world-to-screen and screen-to-world conversion. Changing the camera must not mutate scene objects.
 
-Не пересоздавай геометрию при pan/zoom.
+## Interactive Preview
 
-Геометрия должна храниться в world coordinates.
-
-Viewport отвечает только за преобразование world ↔ screen.
-
-Изменение камеры не должно изменять сами объекты сцены.
-
-## Интерактивный preview
-
-Preview должен работать через объектную модель сцены.
-
-Пример:
+The preview must use the scene object model:
 
 ```rust
 struct Scene {
@@ -181,77 +154,60 @@ enum SceneObject {
 }
 ```
 
-Интерактивность реализуется отдельно от renderer:
+Keep interactivity separate from the renderer:
 
 ```text
 Pointer input
-    ↓
-screen_to_world
-    ↓
-hit_test
-    ↓
-selection
-    ↓
-edit object
-    ↓
-renderer
+    -> screen_to_world
+    -> hit_test
+    -> selection
+    -> edit object
+    -> renderer
 ```
 
-Renderer не должен изменять модель данных.
+The renderer must not mutate the data model.
 
-## Hit testing
+## Hit Testing
 
-Не определяй выбранный объект по цвету пикселя изображения.
+Do not identify a selected object by an image pixel color. Select objects through their geometry in world coordinates.
 
-Выбор объекта должен выполняться по геометрии объекта в world coordinates.
+Every editable object must have a stable identifier.
 
-Все редактируемые объекты должны иметь стабильный идентификатор.
+## Rendering
 
-## Рендеринг
+The renderer must only render `Scene`. Do not put settings changes, G-code parsing, or geometry edits inside it.
 
-Renderer должен только отображать `Scene`.
+The architecture should permit replacing a software renderer with an OpenGL renderer without changing the data model or UI logic.
 
-Не помещай изменение настроек, парсинг G-code или изменение геометрии внутрь renderer.
+## Changing Existing Code
 
-Архитектура должна позволять заменить software renderer на OpenGL renderer без изменения модели данных и UI-логики.
+Before creating a new function:
 
-## Изменения существующего кода
+1. Check whether a similar implementation already exists.
+2. Reuse existing types.
+3. Do not duplicate algorithms.
+4. Do not create a second source of truth for the same data.
 
-Перед созданием новой функции:
+When refactoring is necessary, keep it minimal and within the task scope.
 
-1. Проверь, нет ли уже похожей реализации.
-2. Используй существующие типы.
-3. Не дублируй алгоритмы.
-4. Не создавай второй источник истины для тех же данных.
+## Completion Checklist
 
-Если требуется рефакторинг — выполняй его минимально в рамках задачи.
+Before completing a code-change task:
 
-## После изменений
+1. Run `cargo fmt`.
+2. Run `cargo check`.
+3. Run `cargo clippy` when feasible.
+4. Fix errors and warnings introduced by the change.
+5. Confirm that existing behavior has not regressed.
 
-Перед завершением задачи:
+Do not leave:
 
-1. Запусти `cargo fmt`.
-2. Запусти `cargo check`.
-3. Если возможно — `cargo clippy`.
-4. Исправь ошибки и предупреждения, появившиеся из-за внесённых изменений.
-5. Проверь, что существующее поведение не сломано.
+- TODOs in place of the requested implementation;
+- temporary stubs;
+- commented-out legacy code;
+- unused dependencies;
+- duplicate implementations.
 
-Не оставляй:
+## Implementation Scope
 
-- TODO вместо запрошенной реализации;
-- временные заглушки;
-- закомментированный старый код;
-- неиспользуемые зависимости;
-- дублирующую реализацию.
-
-## Как выполнять задачи
-
-Перед написанием кода кратко определи:
-
-- какие модули затрагиваются;
-- где должна находиться новая ответственность;
-- какие существующие структуры можно использовать.
-
-Затем реализуй минимальный набор изменений.
-
-Не начинай масштабный рефакторинг, если он не требуется для выполнения задачи.
+Make the smallest set of changes that correctly completes the task. Do not begin a broad refactor unless it is required to deliver the requested result.
