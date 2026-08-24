@@ -5,6 +5,8 @@ use crate::preview::data::PreviewData;
 use crate::preview::renderer::{PreviewRenderer, RenderFrame};
 use slint::SharedPixelBuffer;
 
+type Rgba = (u8, u8, u8, u8);
+
 /// The existing CPU rasterizer, retained as the dependable fallback backend.
 #[derive(Default)]
 pub struct SoftwarePreviewRenderer;
@@ -15,15 +17,22 @@ impl PreviewRenderer for SoftwarePreviewRenderer {
     }
 }
 
-fn preview_color(value: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
+fn preview_color(value: &str, fallback: (u8, u8, u8)) -> Rgba {
     let hex = value.trim().trim_start_matches('#');
-    if hex.len() != 6 {
-        return fallback;
+    if hex.len() != 6 && hex.len() != 8 {
+        return (fallback.0, fallback.1, fallback.2, 255);
     }
     let parse = |range| u8::from_str_radix(&hex[range], 16).ok();
     match (parse(0..2), parse(2..4), parse(4..6)) {
-        (Some(r), Some(g), Some(b)) => (r, g, b),
-        _ => fallback,
+        (Some(r), Some(g), Some(b)) => {
+            let alpha = if hex.len() == 8 {
+                parse(6..8).unwrap_or(255)
+            } else {
+                255
+            };
+            (r, g, b, alpha)
+        }
+        _ => (fallback.0, fallback.1, fallback.2, 255),
     }
 }
 
@@ -32,8 +41,8 @@ pub fn draw_grid(
     preview: &PreviewData,
     scale: f64,
     pan: (f64, f64),
-    line_color: (u8, u8, u8),
-    label_color: (u8, u8, u8),
+    line_color: Rgba,
+    label_color: Rgba,
 ) {
     let (width, height) = (buffer.width(), buffer.height());
     if scale <= 0.0 {
@@ -57,8 +66,11 @@ pub fn draw_grid(
             continue;
         }
         for y in 0..height {
-            pixels[(y * width + x as u32) as usize] =
-                slint::Rgb8Pixel::new(line_color.0, line_color.1, line_color.2);
+            blend_pixel(
+                &mut pixels[(y * width + x as u32) as usize],
+                line_color,
+                1.0,
+            );
         }
         labels.push((x + 3, height as i32 - 11, index as f64 * step));
     }
@@ -70,8 +82,11 @@ pub fn draw_grid(
             continue;
         }
         for x in 0..width {
-            pixels[(y as u32 * width + x) as usize] =
-                slint::Rgb8Pixel::new(line_color.0, line_color.1, line_color.2);
+            blend_pixel(
+                &mut pixels[(y as u32 * width + x) as usize],
+                line_color,
+                1.0,
+            );
         }
         labels.push((3, y - 9, index as f64 * step));
     }
@@ -85,7 +100,7 @@ fn draw_number(
     x: i32,
     y: i32,
     value: f64,
-    color: (u8, u8, u8),
+    color: Rgba,
 ) {
     let text = if value.abs() < 0.0001 {
         "0".to_owned()
@@ -104,7 +119,7 @@ fn draw_glyph(
     x: i32,
     y: i32,
     ch: char,
-    color: (u8, u8, u8),
+    color: Rgba,
 ) {
     let glyph = match ch {
         '0' => [7, 5, 5, 5, 7],
@@ -127,8 +142,7 @@ fn draw_glyph(
         for col in 0..3 {
             let (px, py) = (x + col, y + row as i32);
             if bits & (1 << (2 - col)) != 0 && px >= 0 && py >= 0 && px < width && py < height {
-                pixels[(py * width + px) as usize] =
-                    slint::Rgb8Pixel::new(color.0, color.1, color.2);
+                blend_pixel(&mut pixels[(py * width + px) as usize], color, 1.0);
             }
         }
     }
@@ -142,7 +156,7 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
     // Dark editor-like background and a neutral grid.
     for pixel in buffer.make_mut_slice() {
         let color = preview_color(&frame.settings.background_color, (14, 17, 22));
-        *pixel = slint::Rgb8Pixel::new(color.0, color.1, color.2);
+        blend_pixel(pixel, color, 1.0);
     }
     let Some(bounds) = frame.scene.board_bounds.as_ref() else {
         return slint::Image::from_rgb8(buffer);
@@ -207,7 +221,7 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
             preview_color(&settings.axis_y_color, (70, 210, 120)),
         );
     }
-    if settings.show_axes && settings.local_offset_enabled {
+    if settings.show_local_axes && settings.local_offset_enabled {
         local_axes(
             &mut buffer,
             &preview_data,
@@ -217,8 +231,8 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
             pan,
             shift_x,
             shift_y,
-            preview_color(&settings.axis_x_color, (220, 70, 70)),
-            preview_color(&settings.axis_y_color, (70, 210, 120)),
+            preview_color(&settings.local_axis_x_color, (220, 70, 70)),
+            preview_color(&settings.local_axis_y_color, (70, 210, 120)),
         );
     }
 
@@ -446,8 +460,8 @@ pub fn axes(
     width: f32,
     height: f32,
     pan: (f64, f64),
-    x_color: (u8, u8, u8),
-    y_color: (u8, u8, u8),
+    x_color: Rgba,
+    y_color: Rgba,
 ) {
     axes_at(
         buffer, preview, scale, width, height, pan, 0.0, 0.0, 1.0, x_color, y_color,
@@ -466,8 +480,8 @@ pub fn local_axes(
     pan: (f64, f64),
     origin_x_world: f64,
     origin_y_world: f64,
-    x_color: (u8, u8, u8),
-    y_color: (u8, u8, u8),
+    x_color: Rgba,
+    y_color: Rgba,
 ) {
     axes_at(
         buffer,
@@ -495,8 +509,8 @@ fn axes_at(
     origin_x_world: f64,
     origin_y_world: f64,
     opacity: f32,
-    x_color: (u8, u8, u8),
-    y_color: (u8, u8, u8),
+    x_color: Rgba,
+    y_color: Rgba,
 ) {
     let (origin_x, origin_y) =
         preview.world_to_screen(origin_x_world, origin_y_world, scale, width, height);
@@ -541,7 +555,7 @@ pub fn polyline(
     scale: f64,
     width: f32,
     height: f32,
-    color: (u8, u8, u8),
+    color: Rgba,
     thickness: i32,
     pan: (f64, f64),
 ) {
@@ -568,7 +582,7 @@ pub fn dotted_rectangle(
     scale: f64,
     width: f32,
     height: f32,
-    color: (u8, u8, u8),
+    color: Rgba,
     pan: (f64, f64),
 ) {
     for pair in corners.windows(2) {
@@ -612,7 +626,7 @@ pub fn hatched_margin(
     width: f32,
     height: f32,
     pan: (f64, f64),
-    color: (u8, u8, u8),
+    color: Rgba,
 ) {
     if inner_left <= outer_left
         || inner_right >= outer_right
@@ -684,7 +698,7 @@ pub fn rectangle(
     scale: f64,
     width: f32,
     height: f32,
-    color: (u8, u8, u8),
+    color: Rgba,
     pan: (f64, f64),
 ) {
     polyline(
@@ -698,7 +712,7 @@ fn line(
     y0: f32,
     x1: f32,
     y1: f32,
-    color: (u8, u8, u8),
+    color: Rgba,
     thickness: i32,
 ) {
     line_alpha(buffer, x0, y0, x1, y1, color, thickness, 1.0);
@@ -711,7 +725,7 @@ fn line_alpha(
     y0: f32,
     x1: f32,
     y1: f32,
-    color: (u8, u8, u8),
+    color: Rgba,
     thickness: i32,
     opacity: f32,
 ) {
@@ -729,15 +743,7 @@ fn line_alpha(
         let mut error = dx + dy;
         loop {
             if x >= 0 && y >= 0 && x < buffer_width && y < buffer_height {
-                let previous = pixels[(y * buffer_width + x) as usize];
-                let blend = |source: u8, destination: u8| {
-                    (source as f32 * opacity + destination as f32 * (1.0 - opacity)).round() as u8
-                };
-                pixels[(y * buffer_width + x) as usize] = slint::Rgb8Pixel::new(
-                    blend(color.0, previous.r),
-                    blend(color.1, previous.g),
-                    blend(color.2, previous.b),
-                );
+                blend_pixel(&mut pixels[(y * buffer_width + x) as usize], color, opacity);
             }
             if x == end_x && y == end_y {
                 break;
@@ -762,7 +768,7 @@ fn line_alpha_outside_rect(
     y0: f32,
     x1: f32,
     y1: f32,
-    color: (u8, u8, u8),
+    color: Rgba,
     thickness: i32,
     opacity: f32,
     outer: (f32, f32, f32, f32),
@@ -796,15 +802,7 @@ fn line_alpha_outside_rect(
                 && inside_outer
                 && !inside_excluded
             {
-                let previous = pixels[(y * buffer_width + x) as usize];
-                let blend = |source: u8, destination: u8| {
-                    (source as f32 * opacity + destination as f32 * (1.0 - opacity)).round() as u8
-                };
-                pixels[(y * buffer_width + x) as usize] = slint::Rgb8Pixel::new(
-                    blend(color.0, previous.r),
-                    blend(color.1, previous.g),
-                    blend(color.2, previous.b),
-                );
+                blend_pixel(&mut pixels[(y * buffer_width + x) as usize], color, opacity);
             }
             if x == end_x && y == end_y {
                 break;
@@ -819,5 +817,29 @@ fn line_alpha_outside_rect(
                 y += step_y;
             }
         }
+    }
+}
+
+fn blend_pixel(pixel: &mut slint::Rgb8Pixel, color: Rgba, opacity: f32) {
+    let effective_opacity = opacity * color.3 as f32 / 255.0;
+    let blend = |source: u8, destination: u8| {
+        (source as f32 * effective_opacity + destination as f32 * (1.0 - effective_opacity)).round()
+            as u8
+    };
+    *pixel = slint::Rgb8Pixel::new(
+        blend(color.0, pixel.r),
+        blend(color.1, pixel.g),
+        blend(color.2, pixel.b),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::preview_color;
+
+    #[test]
+    fn parses_eight_digit_hex_with_alpha() {
+        assert_eq!(preview_color("#12345680", (0, 0, 0)), (18, 52, 86, 128));
+        assert_eq!(preview_color("#123456", (0, 0, 0)), (18, 52, 86, 255));
     }
 }

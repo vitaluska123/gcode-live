@@ -27,6 +27,7 @@ pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
     ui_settings.set_material_edge_margin_y(settings.material_edge_margin_y as f32);
     ui_settings.set_show_grid(settings.show_grid);
     ui_settings.set_show_axes(settings.show_axes);
+    ui_settings.set_show_local_axes(settings.show_local_axes);
     ui_settings.set_show_material(settings.show_material);
     ui_settings.set_show_safe_area(settings.show_safe_area);
     ui_settings.set_show_margin_hatch(settings.show_margin_hatch);
@@ -38,6 +39,8 @@ pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
     ui_settings.set_grid_label_color(settings.grid_label_color.clone().into());
     ui_settings.set_axis_x_color(settings.axis_x_color.clone().into());
     ui_settings.set_axis_y_color(settings.axis_y_color.clone().into());
+    ui_settings.set_local_axis_x_color(settings.local_axis_x_color.clone().into());
+    ui_settings.set_local_axis_y_color(settings.local_axis_y_color.clone().into());
     ui_settings.set_toolpath_color(settings.toolpath_color.clone().into());
     ui_settings.set_rapid_color(settings.rapid_color.clone().into());
     ui_settings.set_expanded_frame_color(settings.expanded_frame_color.clone().into());
@@ -60,6 +63,12 @@ pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
         .set_grid_label_preview_color(preview_color(&settings.grid_label_color, (150, 160, 175)));
     ui_settings.set_axis_x_preview_color(preview_color(&settings.axis_x_color, (220, 70, 70)));
     ui_settings.set_axis_y_preview_color(preview_color(&settings.axis_y_color, (70, 210, 120)));
+    ui_settings
+        .set_local_axis_x_preview_color(preview_color(&settings.local_axis_x_color, (220, 70, 70)));
+    ui_settings.set_local_axis_y_preview_color(preview_color(
+        &settings.local_axis_y_color,
+        (70, 210, 120),
+    ));
     ui_settings.set_toolpath_preview_color(preview_color(&settings.toolpath_color, (0, 210, 255)));
     ui_settings.set_rapid_preview_color(preview_color(&settings.rapid_color, (255, 190, 0)));
     ui_settings.set_expanded_frame_preview_color(preview_color(
@@ -91,6 +100,7 @@ pub(crate) fn read_ui(ui_settings: UiSettings, source: Settings) -> Settings {
         material_edge_margin_y: ui_settings.get_material_edge_margin_y().max(0.0) as f64,
         show_grid: ui_settings.get_show_grid(),
         show_axes: ui_settings.get_show_axes(),
+        show_local_axes: ui_settings.get_show_local_axes(),
         show_material: ui_settings.get_show_material(),
         show_safe_area: ui_settings.get_show_safe_area(),
         show_margin_hatch: ui_settings.get_show_margin_hatch(),
@@ -102,6 +112,8 @@ pub(crate) fn read_ui(ui_settings: UiSettings, source: Settings) -> Settings {
         grid_label_color: ui_settings.get_grid_label_color().to_string(),
         axis_x_color: ui_settings.get_axis_x_color().to_string(),
         axis_y_color: ui_settings.get_axis_y_color().to_string(),
+        local_axis_x_color: ui_settings.get_local_axis_x_color().to_string(),
+        local_axis_y_color: ui_settings.get_local_axis_y_color().to_string(),
         toolpath_color: ui_settings.get_toolpath_color().to_string(),
         rapid_color: ui_settings.get_rapid_color().to_string(),
         expanded_frame_color: ui_settings.get_expanded_frame_color().to_string(),
@@ -235,12 +247,19 @@ pub(crate) fn install_settings_window_callbacks(
 
 fn preview_color(value: &str, fallback: (u8, u8, u8)) -> slint::Color {
     let hex = value.trim().trim_start_matches('#');
-    if hex.len() != 6 {
+    if hex.len() != 6 && hex.len() != 8 {
         return slint::Color::from_rgb_u8(fallback.0, fallback.1, fallback.2);
     }
     let parse = |range| u8::from_str_radix(&hex[range], 16).ok();
     match (parse(0..2), parse(2..4), parse(4..6)) {
-        (Some(r), Some(g), Some(b)) => slint::Color::from_rgb_u8(r, g, b),
+        (Some(r), Some(g), Some(b)) => {
+            let alpha = if hex.len() == 8 {
+                parse(6..8).unwrap_or(255)
+            } else {
+                255
+            };
+            slint::Color::from_argb_u8(alpha, r, g, b)
+        }
         _ => slint::Color::from_rgb_u8(fallback.0, fallback.1, fallback.2),
     }
 }

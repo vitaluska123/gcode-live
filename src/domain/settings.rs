@@ -42,6 +42,8 @@ pub struct Settings {
     #[serde(skip)]
     pub show_axes: bool,
     #[serde(skip)]
+    pub show_local_axes: bool,
+    #[serde(skip)]
     pub show_material: bool,
     #[serde(skip)]
     pub show_safe_area: bool,
@@ -63,6 +65,10 @@ pub struct Settings {
     pub axis_x_color: String,
     #[serde(skip)]
     pub axis_y_color: String,
+    #[serde(skip)]
+    pub local_axis_x_color: String,
+    #[serde(skip)]
+    pub local_axis_y_color: String,
     #[serde(skip)]
     pub toolpath_color: String,
     #[serde(skip)]
@@ -142,6 +148,8 @@ pub struct DisplaySettings {
     pub background: ColorStyle,
     pub grid: GridStyle,
     pub axes: AxesStyle,
+    #[serde(default)]
+    pub local_axes: AxesStyle,
     pub material: MaterialDisplaySettings,
     pub source: SourceDisplaySettings,
     pub frame: FrameDisplaySettings,
@@ -168,6 +176,15 @@ pub struct AxesStyle {
     pub visible: bool,
     pub x_color: String,
     pub y_color: String,
+}
+impl Default for AxesStyle {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            x_color: "#dc4646".into(),
+            y_color: "#46d278".into(),
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialDisplaySettings {
@@ -217,6 +234,7 @@ impl Default for Settings {
             material_edge_margin_y: 0.0,
             show_grid: false,
             show_axes: false,
+            show_local_axes: false,
             show_material: false,
             show_safe_area: false,
             show_margin_hatch: false,
@@ -228,6 +246,8 @@ impl Default for Settings {
             grid_label_color: String::new(),
             axis_x_color: String::new(),
             axis_y_color: String::new(),
+            local_axis_x_color: String::new(),
+            local_axis_y_color: String::new(),
             toolpath_color: String::new(),
             rapid_color: String::new(),
             expanded_frame_color: String::new(),
@@ -305,6 +325,11 @@ impl Default for DisplaySettings {
                 x_color: "#dc4646".into(),
                 y_color: "#46d278".into(),
             },
+            local_axes: AxesStyle {
+                visible: true,
+                x_color: "#dc4646".into(),
+                y_color: "#46d278".into(),
+            },
             material: MaterialDisplaySettings {
                 outline: VisualStyle::new("#be64ff"),
                 safe_area: VisualStyle::new("#ff4646"),
@@ -372,6 +397,9 @@ impl Settings {
         self.show_axes = self.display.axes.visible;
         self.axis_x_color = self.display.axes.x_color.clone();
         self.axis_y_color = self.display.axes.y_color.clone();
+        self.show_local_axes = self.display.local_axes.visible;
+        self.local_axis_x_color = self.display.local_axes.x_color.clone();
+        self.local_axis_y_color = self.display.local_axes.y_color.clone();
         self.background_color = self.display.background.color.clone();
         self.show_material = self.display.material.outline.visible;
         self.material_color = self.display.material.outline.color.clone();
@@ -432,6 +460,11 @@ impl Settings {
                 visible: self.show_axes,
                 x_color: self.axis_x_color.clone(),
                 y_color: self.axis_y_color.clone(),
+            },
+            local_axes: AxesStyle {
+                visible: self.show_local_axes,
+                x_color: self.local_axis_x_color.clone(),
+                y_color: self.local_axis_y_color.clone(),
             },
             material: MaterialDisplaySettings {
                 outline: VisualStyle {
@@ -651,6 +684,11 @@ impl LegacySettings {
                 },
                 axes: AxesStyle {
                     visible: legacy.show_axes,
+                    x_color: legacy.axis_x_color.clone(),
+                    y_color: legacy.axis_y_color.clone(),
+                },
+                local_axes: AxesStyle {
+                    visible: true,
                     x_color: legacy.axis_x_color,
                     y_color: legacy.axis_y_color,
                 },
