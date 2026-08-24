@@ -1,4 +1,4 @@
-use slint::{ComponentHandle, SharedPixelBuffer};
+use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -111,7 +111,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     // State management. AppState is the single owner of the mutable model;
     // callbacks only retain references to the state fields they require.
     let app_state = AppState::new(settings);
-    let board_bounds = app_state.preview_scene.board_bounds.clone();
+    let preview_scene = app_state.preview_scene.clone();
+    let board_bounds = preview_scene.board_bounds.clone();
     let frame_geometry = app_state.preview_scene.frame_geometry.clone();
     let source_home = app_state.source_home.clone();
     let toolpath = app_state.preview_scene.toolpath.clone();
@@ -759,30 +760,35 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // The UI callback only gathers the current model snapshot. The software
-    // backend owns all rasterization details and can later be replaced.
-    let weak_board = Rc::downgrade(&board_bounds);
-    let weak_frame = Rc::downgrade(&frame_geometry);
-    let weak_toolpath = Rc::downgrade(&toolpath);
-    let weak_rapid_path = Rc::downgrade(&rapid_path);
+    // The UI callback only captures the current state. Renderer backends own
+    // all drawing and receive no mutable application or UI references.
+    let renderer = Rc::new(RefCell::new(
+        preview_renderer::PreviewRendererBackend::default(),
+    ));
+    let weak_scene = Rc::downgrade(&preview_scene);
     let weak_viewport = Rc::downgrade(&viewport);
     let weak_settings = Rc::downgrade(&current_settings);
+    let weak_renderer = Rc::downgrade(&renderer);
     main_window.on_render_preview(move |width, height| {
         let width = width.max(1.0).round() as u32;
         let height = height.max(1.0).round() as u32;
-        let (Some(board), Some(frame), Some(settings), Some(path), Some(rapid), Some(viewport)) = (
-            weak_board.upgrade(),
-            weak_frame.upgrade(),
+        let (Some(scene), Some(settings), Some(viewport), Some(renderer)) = (
+            weak_scene.upgrade(),
             weak_settings.upgrade(),
-            weak_toolpath.upgrade(),
-            weak_rapid_path.upgrade(),
             weak_viewport.upgrade(),
+            weak_renderer.upgrade(),
         ) else {
-            return slint::Image::from_rgb8(SharedPixelBuffer::new(width, height));
+            return slint::Image::from_rgb8(slint::SharedPixelBuffer::new(width, height));
         };
-        preview_renderer::render_software(
-            width, height, &board, &frame, &settings, &path, &rapid, &viewport,
-        )
+        let frame = preview_renderer::RenderFrame {
+            width,
+            height,
+            scene: scene.snapshot(),
+            settings: settings.borrow().clone(),
+            viewport: *viewport.borrow(),
+        };
+        let image = renderer.borrow_mut().render(&frame);
+        image
     });
     main_window.run()?;
     Ok(())

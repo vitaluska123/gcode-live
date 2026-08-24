@@ -16,7 +16,10 @@ mod viewport;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     slint::BackendSelector::new()
-        .backend_name("winit".into())
+        // FemtoVG creates and owns the window's OpenGL context. Slint's winit
+        // backend automatically falls back to the compiled software renderer
+        // if this context cannot be created on the current system.
+        .backend_name("gl".into())
         .select()?;
     let main_window = MainWindow::new()?;
     set_window_icon(&main_window)?;

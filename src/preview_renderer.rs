@@ -1,9 +1,77 @@
-//! Temporary software renderer isolated from application wiring.
-//! It will be replaced by the OpenGL backend without touching UI callbacks.
+//! Preview rendering backends and the shared, immutable frame contract.
 
 use crate::preview::PreviewData;
-use crate::{frame, preview};
+use crate::{frame, preview, scene::PreviewSceneSnapshot, settings::Settings, viewport::Viewport};
 use slint::SharedPixelBuffer;
+
+/// All data required to render one preview image.
+///
+/// Renderers receive this value by reference and must not alter application
+/// state, scene geometry, camera state, or the UI.
+pub struct RenderFrame {
+    pub width: u32,
+    pub height: u32,
+    pub scene: PreviewSceneSnapshot,
+    pub settings: Settings,
+    pub viewport: Viewport,
+}
+
+/// A renderer for an immutable CNC preview frame.
+pub trait PreviewRenderer {
+    fn render(&mut self, frame: &RenderFrame) -> slint::Image;
+}
+
+/// The existing CPU rasterizer, retained as the dependable fallback backend.
+#[derive(Default)]
+pub struct SoftwarePreviewRenderer;
+
+impl PreviewRenderer for SoftwarePreviewRenderer {
+    fn render(&mut self, frame: &RenderFrame) -> slint::Image {
+        render_software_frame(frame)
+    }
+}
+
+/// Preview backend used when Slint's winit/FemtoVG OpenGL compositor is active.
+///
+/// Slint owns the window's OpenGL context and presentation surface. Keeping
+/// that ownership there avoids creating a competing context for the same
+/// native window. The preview still produces an image here; FemtoVG uploads
+/// and composites it through the active OpenGL context. If Slint cannot create
+/// that context, its winit backend selects the software renderer instead.
+#[derive(Default)]
+pub struct OpenGlPreviewRenderer {
+    software_fallback: SoftwarePreviewRenderer,
+}
+
+impl PreviewRenderer for OpenGlPreviewRenderer {
+    fn render(&mut self, frame: &RenderFrame) -> slint::Image {
+        self.software_fallback.render(frame)
+    }
+}
+
+/// Selects the app-level preview backend while Slint owns window GPU resources.
+pub enum PreviewRendererBackend {
+    OpenGl(OpenGlPreviewRenderer),
+    Software(SoftwarePreviewRenderer),
+}
+
+impl Default for PreviewRendererBackend {
+    fn default() -> Self {
+        match std::env::var("CNC_PREVIEW_RENDERER").as_deref() {
+            Ok("software") => Self::Software(SoftwarePreviewRenderer),
+            _ => Self::OpenGl(OpenGlPreviewRenderer::default()),
+        }
+    }
+}
+
+impl PreviewRendererBackend {
+    pub fn render(&mut self, frame: &RenderFrame) -> slint::Image {
+        match self {
+            Self::OpenGl(renderer) => renderer.render(frame),
+            Self::Software(renderer) => renderer.render(frame),
+        }
+    }
+}
 
 fn preview_color(value: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
     let hex = value.trim().trim_start_matches('#');
@@ -107,47 +175,38 @@ fn draw_glyph(buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>, x: i32, y: i32, 
     }
 }
 
-pub fn render_software(
-    width: u32,
-    height: u32,
-    board_rc: &std::cell::RefCell<Option<crate::frame::BoardBounds>>,
-    frame_rc: &std::cell::RefCell<Option<crate::frame::FrameGeometry>>,
-    settings_rc: &std::cell::RefCell<crate::settings::Settings>,
-    path_rc: &std::cell::RefCell<Vec<(f64, f64)>>,
-    rapid_rc: &std::cell::RefCell<Vec<(f64, f64)>>,
-    viewport_rc: &std::cell::RefCell<crate::viewport::Viewport>,
-) -> slint::Image {
+fn render_software_frame(frame: &RenderFrame) -> slint::Image {
+    let width = frame.width;
+    let height = frame.height;
     let mut buffer = SharedPixelBuffer::<slint::Rgb8Pixel>::new(width, height);
 
     // Dark editor-like background and a neutral grid.
     for pixel in buffer.make_mut_slice() {
         *pixel = slint::Rgb8Pixel::new(14, 17, 22);
     }
-    let board_borrow = board_rc.borrow();
-    let Some(bounds) = board_borrow.as_ref() else {
+    let Some(bounds) = frame.scene.board_bounds.as_ref() else {
         return slint::Image::from_rgb8(buffer);
     };
 
-    let frame_borrow = frame_rc.borrow();
-    let Some(frame) = frame_borrow.as_ref() else {
+    let Some(frame_geometry) = frame.scene.frame_geometry.as_ref() else {
         return slint::Image::from_rgb8(buffer);
     };
 
-    let settings = settings_rc.borrow().clone();
+    let settings = &frame.settings;
     let (shift_x, shift_y) = settings.local_offset();
-    let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
-    let preview_left = expanded
-        .as_ref()
-        .map_or(frame.left, |value| frame.left.min(value.left));
-    let preview_right = expanded
-        .as_ref()
-        .map_or(frame.right, |value| frame.right.max(value.right));
-    let preview_bottom = expanded
-        .as_ref()
-        .map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
-    let preview_top = expanded
-        .as_ref()
-        .map_or(frame.top, |value| frame.top.max(value.top));
+    let expanded = frame::FrameGeometry::expanded(bounds, settings);
+    let preview_left = expanded.as_ref().map_or(frame_geometry.left, |value| {
+        frame_geometry.left.min(value.left)
+    });
+    let preview_right = expanded.as_ref().map_or(frame_geometry.right, |value| {
+        frame_geometry.right.max(value.right)
+    });
+    let preview_bottom = expanded.as_ref().map_or(frame_geometry.bottom, |value| {
+        frame_geometry.bottom.min(value.bottom)
+    });
+    let preview_top = expanded.as_ref().map_or(frame_geometry.top, |value| {
+        frame_geometry.top.max(value.top)
+    });
     let preview_data = preview::PreviewData::from_bounds_with_material(
         bounds.x_min + shift_x,
         bounds.x_max + shift_x,
@@ -163,7 +222,7 @@ pub fn render_software(
         settings.material_offset_y,
     );
 
-    let viewport = *viewport_rc.borrow();
+    let viewport = frame.viewport;
     let scale = preview_data.calculate_scale(width as f32, height as f32) * viewport.zoom;
     let pan = (viewport.pan_x, viewport.pan_y);
     if settings.show_grid {
@@ -195,8 +254,9 @@ pub fn render_software(
     // Draw board (blue) - thicker lines
 
     // Draw frame (red) - thicker lines
-    let path = path_rc.borrow();
-    let shifted_path: Vec<_> = path
+    let shifted_path: Vec<_> = frame
+        .scene
+        .toolpath
         .iter()
         .map(|&(x, y)| (x + shift_x, y + shift_y))
         .collect();
@@ -316,11 +376,20 @@ pub fn render_software(
         );
     }
     let anchored_corners = [
-        (frame.left + shift_x, frame.bottom + shift_y),
-        (frame.right + shift_x, frame.bottom + shift_y),
-        (frame.right + shift_x, frame.top + shift_y),
-        (frame.left + shift_x, frame.top + shift_y),
-        (frame.left + shift_x, frame.bottom + shift_y),
+        (
+            frame_geometry.left + shift_x,
+            frame_geometry.bottom + shift_y,
+        ),
+        (
+            frame_geometry.right + shift_x,
+            frame_geometry.bottom + shift_y,
+        ),
+        (frame_geometry.right + shift_x, frame_geometry.top + shift_y),
+        (frame_geometry.left + shift_x, frame_geometry.top + shift_y),
+        (
+            frame_geometry.left + shift_x,
+            frame_geometry.bottom + shift_y,
+        ),
     ];
     rectangle(
         &mut buffer,
@@ -334,15 +403,15 @@ pub fn render_software(
     );
     let corner_radius = (settings.tool_diameter / 2.0)
         .min(1.0)
-        .min(frame.width() / 4.0)
-        .min(frame.height() / 4.0)
+        .min(frame_geometry.width() / 4.0)
+        .min(frame_geometry.height() / 4.0)
         .max(0.0);
-    for (left, right) in frame::top_tab_intervals(frame, corner_radius, &settings) {
+    for (left, right) in frame::top_tab_intervals(frame_geometry, corner_radius, settings) {
         polyline(
             &mut buffer,
             &[
-                (left + shift_x, frame.top + shift_y),
-                (right + shift_x, frame.top + shift_y),
+                (left + shift_x, frame_geometry.top + shift_y),
+                (right + shift_x, frame_geometry.top + shift_y),
             ],
             &preview_data,
             scale,
@@ -353,8 +422,9 @@ pub fn render_software(
             pan,
         );
     }
-    let rapid = rapid_rc.borrow();
-    let shifted_rapid: Vec<_> = rapid
+    let shifted_rapid: Vec<_> = frame
+        .scene
+        .rapid_path
         .iter()
         .map(|&(x, y)| (x + shift_x, y + shift_y))
         .collect();
