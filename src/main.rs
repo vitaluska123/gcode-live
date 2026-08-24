@@ -6,6 +6,7 @@ use slint::winit_030::{winit::window::Icon, WinitWindowAccessor};
 
 mod app;
 mod app_file;
+mod app_preview_actions;
 mod app_settings;
 mod app_state;
 mod exporter;

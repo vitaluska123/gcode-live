@@ -3,8 +3,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    app_file, app_settings, app_state::AppState, exporter, frame, preview, preview_input,
-    preview_renderer, settings, viewport::Viewport, MainWindow, UiSettings,
+    app_file, app_preview_actions, app_settings, app_state::AppState, exporter, frame, preview,
+    preview_input, preview_renderer, settings, viewport::Viewport, MainWindow, UiSettings,
 };
 
 pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
@@ -402,21 +402,11 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         };
         window.invoke_update_preview();
     });
-    let input_state = preview_input.clone();
-    main_window.on_begin_pan(move |x, y| {
-        input_state.borrow_mut().begin_pan(x as f64, y as f64);
-    });
-    let input_state = preview_input.clone();
-    let viewport_state = viewport.clone();
-    let window_weak = main_window.as_weak();
-    main_window.on_pan_preview(move |x, y| {
-        input_state
-            .borrow_mut()
-            .pan_to(&mut viewport_state.borrow_mut(), x as f64, y as f64);
-        if let Some(window) = window_weak.upgrade() {
-            window.invoke_update_preview();
-        }
-    });
+    app_preview_actions::install_pan_callbacks(
+        &main_window,
+        preview_input.clone(),
+        viewport.clone(),
+    );
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
     let weak_viewport = Rc::downgrade(&viewport);
@@ -442,52 +432,17 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return;
         };
         let settings = settings_rc.borrow().clone();
-        let expanded = frame::FrameGeometry::expanded(&bounds, &settings);
-        let preview_left = expanded
-            .as_ref()
-            .map_or(frame.left, |value| frame.left.min(value.left));
-        let preview_right = expanded
-            .as_ref()
-            .map_or(frame.right, |value| frame.right.max(value.right));
-        let preview_bottom = expanded
-            .as_ref()
-            .map_or(frame.bottom, |value| frame.bottom.min(value.bottom));
-        let preview_top = expanded
-            .as_ref()
-            .map_or(frame.top, |value| frame.top.max(value.top));
-        let (shift_x, shift_y) = settings.local_offset();
-        let data = preview::PreviewData::from_bounds_with_material(
-            bounds.x_min + shift_x,
-            bounds.x_max + shift_x,
-            bounds.y_min + shift_y,
-            bounds.y_max + shift_y,
-            preview_left + shift_x,
-            preview_right + shift_x,
-            preview_bottom + shift_y,
-            preview_top + shift_y,
-            settings.material_width,
-            settings.material_height,
-            settings.material_offset_x,
-            settings.material_offset_y,
-        );
-        let Some(transform) = preview_input::PreviewTransform::new(data, width, height) else {
-            return;
-        };
-        let Some((world_x, world_y)) =
-            transform.screen_to_world(*viewport.borrow(), x as f64, y as f64)
-        else {
-            return;
-        };
-        let text = if settings.local_offset_enabled {
-            format!(
-                "Локальные: X: {:.3}   Y: {:.3}\nГлобальные: X: {world_x:.3}   Y: {world_y:.3}",
-                world_x - settings.local_offset_x,
-                world_y - settings.local_offset_y,
-            )
-        } else {
-            format!("Глобальные: X: {world_x:.3}   Y: {world_y:.3}")
-        };
-        window.set_cursor_coordinates(text.into());
+        let camera = *viewport.borrow();
+        if let Some(text) = app_preview_actions::cursor_text(
+            &bounds,
+            &frame,
+            &settings,
+            camera,
+            (x, y),
+            (width, height),
+        ) {
+            window.set_cursor_coordinates(text.into());
+        }
     });
 
     // Save settings handler
