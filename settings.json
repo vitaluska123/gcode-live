@@ -1,40 +1,79 @@
 {
-  "offset_x": 4.77,
-  "offset_y": 4.79,
-  "local_offset_enabled": false,
-  "local_offset_x": -40.0,
-  "local_offset_y": 6.0,
-  "material_width": 150.0,
-  "material_height": 150.0,
-  "material_offset_x": -8.0,
-  "material_offset_y": 3.0,
-  "material_edge_margin_x": 2.0,
-  "material_edge_margin_y": 2.0,
-  "show_grid": true,
-  "show_axes": true,
-  "show_material": true,
-  "show_safe_area": true,
-  "show_margin_hatch": true,
-  "material_color": "#be64ff",
-  "safe_area_color": "#ff4646",
-  "frame_color": "#ff4664",
-  "background_color": "#0e1116",
-  "grid_color": "#2a303a",
-  "grid_label_color": "#96a0af",
-  "axis_x_color": "#dc4646",
-  "axis_y_color": "#46d278",
-  "toolpath_color": "#00d2ff",
-  "rapid_color": "#ffbe00",
-  "expanded_frame_color": "#ffd200",
-  "tab_color": "#ffdc46",
-  "margin_hatch_color": "#ff4646",
-  "show_toolpath": true,
-  "show_rapid": true,
-  "show_expanded_frame": true,
-  "show_frame": true,
-  "show_tabs": true,
-  "tab_width": 3.0,
-  "minimum_tabs": 3,
-  "maximum_tab_gap": 20.0,
-  "score_tabs": false
+  "schema_version": 2,
+  "calculation": {
+    "frame_offset_x": 4.77,
+    "frame_offset_y": 4.79,
+    "tabs": {
+      "width": 3.0,
+      "minimum_count": 3,
+      "maximum_gap": 20.0,
+      "score_to_half_depth": true
+    }
+  },
+  "coordinates": {
+    "local_origin_enabled": false,
+    "local_origin_x": -40.0,
+    "local_origin_y": 6.0
+  },
+  "material": {
+    "width": 150.0,
+    "height": 150.0,
+    "offset_x": -8.0,
+    "offset_y": 3.0,
+    "edge_margin_x": 2.0,
+    "edge_margin_y": 2.0
+  },
+  "display": {
+    "background": {
+      "color": "#0e1116"
+    },
+    "grid": {
+      "visible": true,
+      "color": "#2a303a",
+      "label_color": "#96a0af"
+    },
+    "axes": {
+      "visible": true,
+      "x_color": "#dc4646",
+      "y_color": "#46d278"
+    },
+    "material": {
+      "outline": {
+        "visible": true,
+        "color": "#be64ff"
+      },
+      "safe_area": {
+        "visible": true,
+        "color": "#ff4646"
+      },
+      "margin_hatch": {
+        "visible": true,
+        "color": "#ff4646"
+      }
+    },
+    "source": {
+      "toolpath": {
+        "visible": true,
+        "color": "#00d2ff"
+      },
+      "rapid_moves": {
+        "visible": true,
+        "color": "#ffbe00"
+      }
+    },
+    "frame": {
+      "outline": {
+        "visible": true,
+        "color": "#ff4664"
+      },
+      "expanded_area": {
+        "visible": true,
+        "color": "#ffd200"
+      },
+      "tabs": {
+        "visible": true,
+        "color": "#ffdc46"
+      }
+    }
+  }
 }
