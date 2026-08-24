@@ -50,52 +50,40 @@ ui/
 Slint components present data and forward events. G-code parsing, frame
 calculation, persistence, viewport changes, and rendering policy stay in Rust.
 
-## Direction of the next Rust refactor
+## Current Rust layout
 
-The Rust layout is in a **transitional state**. The extracted application
-modules have been consolidated into `src/app/`:
+The organizational migration is nearly complete:
 
 ```text
 src/
 ├── app/
-│   ├── mod.rs                   composition and remaining callback wiring
+│   ├── mod.rs                   application composition and adapter registration
 │   ├── state.rs                 AppState ownership
 │   ├── settings.rs              Settings ↔ UiSettings mapping and callbacks
-│   ├── file_actions.rs          editor-safe source G-code preparation
-│   └── preview_actions.rs       pan callbacks and cursor-coordinate mapping
-├── exporter.rs                  still flat; to move to export/gcode.rs
-├── frame.rs                     still flat; to split into domain/frame.rs and domain/gcode.rs
-├── preview.rs                   still flat; to move to preview/data.rs
-├── preview_input.rs             still flat; to move to preview/input.rs
-├── preview_renderer.rs          still flat; to split under preview/
-├── scene.rs                     still flat; to move to preview/scene.rs
-├── settings.rs                  still flat; to move to domain/settings.rs
-└── viewport.rs                  still flat; to move to preview/viewport.rs
+│   ├── file_actions.rs          open/apply source and final G-code callbacks
+│   ├── preview_actions.rs       render, zoom, fit, pan and cursor callbacks
+│   └── export_actions.rs        export callback and material confirmations
+├── domain/
+│   ├── frame.rs                 board/frame geometry and tab placement
+│   ├── gcode.rs                 temporary public facade for parsing API
+│   └── settings.rs              persisted settings model
+├── preview/
+│   ├── data.rs, input.rs, scene.rs, viewport.rs
+│   └── renderer.rs, software_renderer.rs, opengl_renderer.rs
+└── export/
+    └── gcode.rs                 generated G-code and file writing
 ```
 
-`app/settings.rs` owns the UI-settings mapping plus `sync-settings` and
-`save-settings` callbacks. `app/mod.rs` still owns callbacks for opening and
-applying G-code, preview zoom/fit/cursor/rendering, and TAP export. The next
-step is to move those callback groups into `file_actions.rs`,
-`preview_actions.rs`, and a new `export_actions.rs`, leaving `app/mod.rs` as
-composition only. Do not add top-level `app_*.rs` modules.
+`app/mod.rs` contains no callback implementations. `app/settings.rs` owns the
+UI-settings mapping and settings callbacks. File, preview and export callbacks
+are registered only from their respective action modules.
 
-The target groups code by responsibility while preserving behaviour and a
-single source of state:
-
-```text
-src/
-├── app/
-│   ├── mod.rs                   application composition
-│   ├── state.rs                 AppState
-│   ├── settings.rs              UiSettings mapping and callbacks
-│   ├── file_actions.rs          open/apply source and final G-code
-│   ├── preview_actions.rs       zoom, fit, pan, cursor, render callback
-│   └── export_actions.rs        export callback and confirmations
-├── domain/                      G-code parsing, frame geometry, settings model
-├── preview/                     scene, viewport, input, frame data, renderers
-└── export/                      generated G-code and file writing
-```
+The remaining migration is deliberately small: move the physical G-code parser
+implementation (`apply_source_cutting_parameters`, `parse_gcode_*`,
+`gcode_words`, and `strip_comments`) from `domain/frame.rs` to
+`domain/gcode.rs`. At present, `domain/gcode.rs` is only a facade that
+re-exports those functions. Preserve the public API and move the parser tests
+with the implementation or import the parser API explicitly from frame tests.
 
 Each migration step must keep the `MainWindow` callback/property contract
 unchanged, run `cargo fmt`, `cargo check`, and `cargo test`, and avoid commits
