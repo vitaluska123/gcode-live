@@ -120,10 +120,10 @@ impl Settings {
         }
 
         let content =
-            std::fs::read_to_string(&path).map_err(|e| SettingsError::ReadError(e.to_string()))?;
+            std::fs::read_to_string(&path).map_err(|e| SettingsError::Read(e.to_string()))?;
 
         let settings: Self =
-            serde_json::from_str(&content).map_err(|e| SettingsError::ParseError(e.to_string()))?;
+            serde_json::from_str(&content).map_err(|e| SettingsError::Parse(e.to_string()))?;
 
         Ok(settings)
     }
@@ -149,9 +149,9 @@ impl Settings {
             ..self.clone()
         };
         let content = serde_json::to_string_pretty(&saved)
-            .map_err(|e| SettingsError::SerializeError(e.to_string()))?;
+            .map_err(|e| SettingsError::Serialize(e.to_string()))?;
 
-        std::fs::write(&path, content).map_err(|e| SettingsError::WriteError(e.to_string()))?;
+        std::fs::write(&path, content).map_err(|e| SettingsError::Write(e.to_string()))?;
 
         Ok(())
     }
@@ -207,11 +207,11 @@ impl Settings {
 #[derive(Debug, thiserror::Error)]
 pub enum SettingsError {
     #[error("Failed to read settings file: {0}")]
-    ReadError(String),
+    Read(String),
     #[error("Failed to parse settings file: {0}")]
-    ParseError(String),
+    Parse(String),
     #[error("Failed to serialize settings: {0}")]
-    SerializeError(String),
+    Serialize(String),
     #[error("Failed to write settings file: {0}")]
-    WriteError(String),
+    Write(String),
 }

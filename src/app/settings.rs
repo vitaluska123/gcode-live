@@ -1,4 +1,8 @@
-use crate::{settings::Settings, UiSettings};
+use std::rc::Rc;
+
+use slint::ComponentHandle;
+
+use crate::{frame, settings::Settings, MainWindow, UiSettings};
 
 /// Populate Slint's settings bridge from the persisted application settings.
 pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
@@ -60,6 +64,70 @@ pub(crate) fn read_ui(ui_settings: UiSettings, source: Settings) -> Settings {
         frame_color: ui_settings.get_frame_color().to_string(),
         ..source
     }
+}
+
+pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &super::state::AppState) {
+    let board_bounds = app_state.preview_scene.board_bounds.clone();
+    let frame_geometry = app_state.preview_scene.frame_geometry.clone();
+    let source_home = app_state.source_home.clone();
+    let current_settings = app_state.settings.clone();
+
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
+    let weak_home = Rc::downgrade(&source_home);
+    let window_weak = main_window.as_weak();
+    main_window.on_sync_settings(move || {
+        let (Some(window), Some(settings_rc), Some(board_rc), Some(frame_rc), Some(home_rc)) = (
+            window_weak.upgrade(),
+            weak_settings.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_home.upgrade(),
+        ) else {
+            return;
+        };
+        let new_settings = read_ui(window.global::<UiSettings>(), settings_rc.borrow().clone());
+        *settings_rc.borrow_mut() = new_settings.clone();
+        let Some(bounds) = board_rc.borrow().clone() else {
+            return;
+        };
+        if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
+            window.set_frame_width(format!("{:.3} mm", frame.width()).into());
+            window.set_frame_height(format!("{:.3} mm", frame.height()).into());
+            window.set_final_gcode(
+                crate::exporter::generate_frame_gcode(
+                    &bounds,
+                    &frame,
+                    &new_settings,
+                    *home_rc.borrow(),
+                )
+                .into(),
+            );
+            *frame_rc.borrow_mut() = Some(frame);
+        }
+    });
+
+    let weak_settings = Rc::downgrade(&current_settings);
+    let window_weak = main_window.as_weak();
+    main_window.on_save_settings(move || {
+        let (Some(window), Some(settings_rc)) = (window_weak.upgrade(), weak_settings.upgrade())
+        else {
+            return;
+        };
+        let new_settings = read_ui(window.global::<UiSettings>(), settings_rc.borrow().clone());
+        if let Err(error) = new_settings.save() {
+            window.invoke_show_error(format!("Failed to save settings: {error}").into());
+            return;
+        }
+        *settings_rc.borrow_mut() = new_settings.clone();
+        if let Some(bounds) = board_bounds.borrow().clone() {
+            if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
+                *frame_geometry.borrow_mut() = Some(frame);
+            }
+        }
+        window.invoke_update_preview();
+    });
 }
 
 fn preview_color(value: &str, fallback: (u8, u8, u8)) -> slint::Color {

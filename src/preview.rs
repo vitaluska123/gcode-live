@@ -40,6 +40,7 @@ impl Default for PreviewData {
 }
 
 impl PreviewData {
+    #[allow(clippy::too_many_arguments)] // Mirrors the independently supplied preview bounds.
     pub fn from_bounds_with_material(
         board_x_min: f64,
         board_x_max: f64,

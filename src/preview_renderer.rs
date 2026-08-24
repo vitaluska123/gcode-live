@@ -469,6 +469,7 @@ pub fn axes(
 
 /// Draw the local coordinate plane at its global origin. Half opacity keeps it
 /// visually distinct from the machine/global axes.
+#[allow(clippy::too_many_arguments)] // Renderer primitive parameters remain allocation-free.
 pub fn local_axes(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     preview: &PreviewData,
@@ -492,6 +493,7 @@ pub fn local_axes(
     );
 }
 
+#[allow(clippy::too_many_arguments)] // Shared renderer primitive parameters remain explicit.
 fn axes_at(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     preview: &PreviewData,
@@ -556,6 +558,7 @@ fn axes_at(
     );
 }
 
+#[allow(clippy::too_many_arguments)] // Renderer primitive parameters remain allocation-free.
 pub fn polyline(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     points: &[(f64, f64)],
@@ -582,6 +585,7 @@ pub fn polyline(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // Renderer primitive parameters remain allocation-free.
 pub fn dotted_rectangle(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     corners: &[(f64, f64)],
@@ -617,6 +621,7 @@ pub fn dotted_rectangle(
 }
 
 /// Fill the area between two axis-aligned rectangles with a translucent hatch.
+#[allow(clippy::too_many_arguments)] // The two rectangles are passed as explicit bounds.
 pub fn hatched_margin(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     outer_left: f64,
@@ -695,6 +700,7 @@ pub fn hatched_margin(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // Renderer primitive parameters remain allocation-free.
 pub fn rectangle(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     corners: &[(f64, f64)],
@@ -722,6 +728,7 @@ fn line(
     line_alpha(buffer, x0, y0, x1, y1, color, thickness, 1.0);
 }
 
+#[allow(clippy::too_many_arguments)] // Raster line primitive parameters remain explicit.
 fn line_alpha(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     x0: f32,
@@ -772,6 +779,7 @@ fn line_alpha(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // Clipping rectangles are passed without temporary allocations.
 fn line_alpha_outside_rect(
     buffer: &mut SharedPixelBuffer<slint::Rgb8Pixel>,
     x0: f32,

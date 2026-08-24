@@ -14,7 +14,7 @@ pub fn generate_frame_gcode(
     // Header
     gcode.push_str("G21 G17 G90\n");
     gcode.push_str(&format!("M3 S{}\n", settings.spindle_speed as i64));
-    gcode.push_str("\n");
+    gcode.push('\n');
 
     let corner_radius = (settings.tool_diameter / 2.0)
         .min(1.0)
@@ -34,7 +34,7 @@ pub fn generate_frame_gcode(
         start_x + shift_x,
         start_y + shift_y
     ));
-    gcode.push_str("\n");
+    gcode.push('\n');
 
     // Calculate depth passes
     let cut_depth = settings.cut_depth.abs();
@@ -80,7 +80,7 @@ pub fn generate_frame_gcode(
             }
         }
 
-        gcode.push_str("\n");
+        gcode.push('\n');
     }
 
     // Retract and end
@@ -98,6 +98,7 @@ pub fn generate_frame_gcode(
     gcode
 }
 
+#[allow(clippy::too_many_arguments)] // G-code segment coordinates are intentionally explicit.
 fn append_top_edge_with_tabs(
     gcode: &mut String,
     from_x: f64,

@@ -3,22 +3,29 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    app_file, app_preview_actions, app_settings, app_state::AppState, exporter, frame, preview,
-    preview_input, preview_renderer, settings, viewport::Viewport, MainWindow, UiSettings,
+    exporter, frame, preview, preview_input, preview_renderer, viewport::Viewport, MainWindow,
+    UiSettings,
 };
+
+mod file_actions;
+mod preview_actions;
+mod settings;
+mod state;
+
+use self::state::AppState;
 
 pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     // Load settings
-    let settings = match settings::Settings::load() {
+    let settings = match crate::settings::Settings::load() {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Warning: Could not load settings: {}", e);
-            settings::Settings::default()
+            crate::settings::Settings::default()
         }
     };
 
     // Initialize UI with settings
-    app_settings::initialize_ui(main_window.global::<UiSettings>(), &settings);
+    self::settings::initialize_ui(main_window.global::<UiSettings>(), &settings);
 
     // State management. AppState is the single owner of the mutable model;
     // callbacks only retain references to the state fields they require.
@@ -34,54 +41,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     let preview_input = app_state.preview_input.clone();
     let current_settings = app_state.settings.clone();
 
-    // Keep the Rust state and calculated frame in step with edits made in the UI.
-    let weak_board = Rc::downgrade(&board_bounds);
-    let weak_frame = Rc::downgrade(&frame_geometry);
-    let weak_settings = Rc::downgrade(&current_settings);
-    let weak_home = Rc::downgrade(&source_home);
-    let window_weak = main_window.as_weak();
-    main_window.on_sync_settings(move || {
-        let Some(window) = window_weak.upgrade() else {
-            return;
-        };
-        let Some(settings_rc) = weak_settings.upgrade() else {
-            return;
-        };
-
-        let new_settings =
-            app_settings::read_ui(window.global::<UiSettings>(), settings_rc.borrow().clone());
-
-        *settings_rc.borrow_mut() = new_settings.clone();
-
-        let Some(board_rc) = weak_board.upgrade() else {
-            return;
-        };
-        let Some(frame_rc) = weak_frame.upgrade() else {
-            return;
-        };
-        let Some(home_rc) = weak_home.upgrade() else {
-            return;
-        };
-        let bounds = board_rc.borrow().clone();
-        if let Some(bounds) = bounds {
-            if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
-                window.set_frame_width(format!("{:.3} mm", frame.width()).into());
-                window.set_frame_height(format!("{:.3} mm", frame.height()).into());
-                // Keep the editor in sync with export: the displayed program
-                // is already expressed in global machine coordinates.
-                window.set_final_gcode(
-                    exporter::generate_frame_gcode(
-                        &bounds,
-                        &frame,
-                        &new_settings,
-                        *home_rc.borrow(),
-                    )
-                    .into(),
-                );
-                *frame_rc.borrow_mut() = Some(frame);
-            }
-        }
-    });
+    self::settings::install_callbacks(&main_window, &app_state);
 
     // Open TAP file handler
     let weak_board = Rc::downgrade(&board_bounds);
@@ -180,7 +140,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         *home_rc.borrow_mut() = home;
         *path_rc.borrow_mut() = path;
         *rapid_rc.borrow_mut() = rapid;
-        let (source_gcode, source_gcode_truncated) = app_file::source_gcode_for_editor(&content);
+        let (source_gcode, source_gcode_truncated) =
+            self::file_actions::source_gcode_for_editor(&content);
         window.set_source_gcode(source_gcode.into());
         window.set_source_gcode_truncated(source_gcode_truncated);
         window.set_final_gcode(
@@ -402,7 +363,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         };
         window.invoke_update_preview();
     });
-    app_preview_actions::install_pan_callbacks(
+    self::preview_actions::install_pan_callbacks(
         &main_window,
         preview_input.clone(),
         viewport.clone(),
@@ -433,7 +394,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         };
         let settings = settings_rc.borrow().clone();
         let camera = *viewport.borrow();
-        if let Some(text) = app_preview_actions::cursor_text(
+        if let Some(text) = self::preview_actions::cursor_text(
             &bounds,
             &frame,
             &settings,
@@ -443,40 +404,6 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
         ) {
             window.set_cursor_coordinates(text.into());
         }
-    });
-
-    // Save settings handler
-    let board_bounds_clone = board_bounds.clone();
-    let frame_geometry_clone = frame_geometry.clone();
-    let weak_settings = Rc::downgrade(&current_settings);
-    let window_weak = main_window.as_weak();
-
-    main_window.on_save_settings(move || {
-        let Some(window) = window_weak.upgrade() else {
-            return;
-        };
-        let Some(settings_rc) = weak_settings.upgrade() else {
-            return;
-        };
-
-        let new_settings =
-            app_settings::read_ui(window.global::<UiSettings>(), settings_rc.borrow().clone());
-
-        if let Err(e) = new_settings.save() {
-            window.invoke_show_error(format!("Failed to save settings: {}", e).into());
-            return;
-        }
-
-        *settings_rc.borrow_mut() = new_settings.clone();
-
-        // Recalculate frame if we have board data
-        let bounds = board_bounds_clone.borrow().clone();
-        if let Some(bounds) = bounds {
-            if let Some(frame) = frame::FrameGeometry::calculate(&bounds, &new_settings) {
-                *frame_geometry_clone.borrow_mut() = Some(frame);
-            }
-        }
-        window.invoke_update_preview();
     });
 
     // Export TAP handler
@@ -570,7 +497,6 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
 
         if let Err(e) = exporter::save_gcode(&gcode, &file_path) {
             window.invoke_show_error(format!("Failed to export G-code: {}", e).into());
-            return;
         }
     });
 
