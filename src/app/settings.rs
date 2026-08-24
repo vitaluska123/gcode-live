@@ -2,7 +2,11 @@ use std::rc::Rc;
 
 use slint::ComponentHandle;
 
-use crate::{frame, settings::Settings, MainWindow, UiSettings};
+use crate::{
+    domain::{frame, settings::Settings},
+    export::gcode as export_gcode,
+    MainWindow, UiSettings,
+};
 
 /// Populate Slint's settings bridge from the persisted application settings.
 pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
@@ -96,7 +100,7 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &super::sta
             window.set_frame_width(format!("{:.3} mm", frame.width()).into());
             window.set_frame_height(format!("{:.3} mm", frame.height()).into());
             window.set_final_gcode(
-                crate::exporter::generate_frame_gcode(
+                export_gcode::generate_frame_gcode(
                     &bounds,
                     &frame,
                     &new_settings,

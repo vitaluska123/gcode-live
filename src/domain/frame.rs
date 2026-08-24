@@ -1,4 +1,4 @@
-use crate::settings::Settings;
+use crate::domain::settings::Settings;
 
 /// Board dimensions extracted from G-code file
 #[derive(Debug, Clone, Default)]

@@ -1,5 +1,5 @@
-use crate::preview::PreviewData;
-use crate::viewport::Viewport;
+use crate::preview::data::PreviewData;
+use crate::preview::viewport::Viewport;
 
 /// Pointer interaction state for the preview canvas.
 #[derive(Default)]

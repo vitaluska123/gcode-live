@@ -1,5 +1,5 @@
-use crate::frame::{top_tab_intervals, BoardBounds, FrameGeometry};
-use crate::settings::Settings;
+use crate::domain::frame::{top_tab_intervals, BoardBounds, FrameGeometry};
+use crate::domain::settings::Settings;
 
 /// Generate G-code for the frame cutting operation
 pub fn generate_frame_gcode(

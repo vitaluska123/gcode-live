@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::frame::{BoardBounds, FrameGeometry};
+use crate::domain::frame::{BoardBounds, FrameGeometry};
 
 /// Immutable world-coordinate data consumed by a preview renderer for one frame.
 #[derive(Clone, Default)]

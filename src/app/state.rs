@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::preview_input::PreviewInput;
-use crate::scene::PreviewScene;
-use crate::settings::Settings;
-use crate::viewport::Viewport;
+use crate::domain::settings::Settings;
+use crate::preview::input::PreviewInput;
+use crate::preview::scene::PreviewScene;
+use crate::preview::viewport::Viewport;
 
 /// Mutable application model shared by the UI callback adapters.
 ///

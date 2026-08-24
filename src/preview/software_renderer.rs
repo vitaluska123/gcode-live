@@ -1,25 +1,9 @@
-//! Preview rendering backends and the shared, immutable frame contract.
+//! CPU preview rasterizer.
 
-use crate::preview::PreviewData;
-use crate::{frame, preview, scene::PreviewSceneSnapshot, settings::Settings, viewport::Viewport};
+use crate::domain::frame;
+use crate::preview::data::PreviewData;
+use crate::preview::renderer::{PreviewRenderer, RenderFrame};
 use slint::SharedPixelBuffer;
-
-/// All data required to render one preview image.
-///
-/// Renderers receive this value by reference and must not alter application
-/// state, scene geometry, camera state, or the UI.
-pub struct RenderFrame {
-    pub width: u32,
-    pub height: u32,
-    pub scene: PreviewSceneSnapshot,
-    pub settings: Settings,
-    pub viewport: Viewport,
-}
-
-/// A renderer for an immutable CNC preview frame.
-pub trait PreviewRenderer {
-    fn render(&mut self, frame: &RenderFrame) -> slint::Image;
-}
 
 /// The existing CPU rasterizer, retained as the dependable fallback backend.
 #[derive(Default)]
@@ -28,48 +12,6 @@ pub struct SoftwarePreviewRenderer;
 impl PreviewRenderer for SoftwarePreviewRenderer {
     fn render(&mut self, frame: &RenderFrame) -> slint::Image {
         render_software_frame(frame)
-    }
-}
-
-/// Preview backend used when Slint's winit/FemtoVG OpenGL compositor is active.
-///
-/// Slint owns the window's OpenGL context and presentation surface. Keeping
-/// that ownership there avoids creating a competing context for the same
-/// native window. The preview still produces an image here; FemtoVG uploads
-/// and composites it through the active OpenGL context. If Slint cannot create
-/// that context, its winit backend selects the software renderer instead.
-#[derive(Default)]
-pub struct OpenGlPreviewRenderer {
-    software_fallback: SoftwarePreviewRenderer,
-}
-
-impl PreviewRenderer for OpenGlPreviewRenderer {
-    fn render(&mut self, frame: &RenderFrame) -> slint::Image {
-        self.software_fallback.render(frame)
-    }
-}
-
-/// Selects the app-level preview backend while Slint owns window GPU resources.
-pub enum PreviewRendererBackend {
-    OpenGl(OpenGlPreviewRenderer),
-    Software(SoftwarePreviewRenderer),
-}
-
-impl Default for PreviewRendererBackend {
-    fn default() -> Self {
-        match std::env::var("CNC_PREVIEW_RENDERER").as_deref() {
-            Ok("software") => Self::Software(SoftwarePreviewRenderer),
-            _ => Self::OpenGl(OpenGlPreviewRenderer::default()),
-        }
-    }
-}
-
-impl PreviewRendererBackend {
-    pub fn render(&mut self, frame: &RenderFrame) -> slint::Image {
-        match self {
-            Self::OpenGl(renderer) => renderer.render(frame),
-            Self::Software(renderer) => renderer.render(frame),
-        }
     }
 }
 
@@ -207,7 +149,7 @@ fn render_software_frame(frame: &RenderFrame) -> slint::Image {
     let preview_top = expanded.as_ref().map_or(frame_geometry.top, |value| {
         frame_geometry.top.max(value.top)
     });
-    let preview_data = preview::PreviewData::from_bounds_with_material(
+    let preview_data = PreviewData::from_bounds_with_material(
         bounds.x_min + shift_x,
         bounds.x_max + shift_x,
         bounds.y_min + shift_y,

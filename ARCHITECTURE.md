@@ -52,23 +52,33 @@ calculation, persistence, viewport changes, and rendering policy stay in Rust.
 
 ## Direction of the next Rust refactor
 
-The current flat `src/` layout is in a **transitional state**. The following
-modules have already been extracted, but have not yet been moved into their
-final folders:
+The Rust layout is in a **transitional state**. The extracted application
+modules have been consolidated into `src/app/`:
 
 ```text
 src/
-├── app.rs                       current callback wiring and composition
-├── app_state.rs                 AppState ownership
-├── app_settings.rs              Settings ↔ UiSettings mapping
-├── app_file.rs                  editor-safe source G-code preparation
-└── app_preview_actions.rs       pan callbacks and cursor-coordinate mapping
+├── app/
+│   ├── mod.rs                   composition and remaining callback wiring
+│   ├── state.rs                 AppState ownership
+│   ├── settings.rs              Settings ↔ UiSettings mapping and callbacks
+│   ├── file_actions.rs          editor-safe source G-code preparation
+│   └── preview_actions.rs       pan callbacks and cursor-coordinate mapping
+├── exporter.rs                  still flat; to move to export/gcode.rs
+├── frame.rs                     still flat; to split into domain/frame.rs and domain/gcode.rs
+├── preview.rs                   still flat; to move to preview/data.rs
+├── preview_input.rs             still flat; to move to preview/input.rs
+├── preview_renderer.rs          still flat; to split under preview/
+├── scene.rs                     still flat; to move to preview/scene.rs
+├── settings.rs                  still flat; to move to domain/settings.rs
+└── viewport.rs                  still flat; to move to preview/viewport.rs
 ```
 
-`app.rs` still owns most file, preview, settings, and export callbacks. The
-next refactor must consolidate the transitional `app_*.rs` modules into
-`src/app/` and then move the remaining callbacks there. Do not add more
-top-level `app_*.rs` modules.
+`app/settings.rs` owns the UI-settings mapping plus `sync-settings` and
+`save-settings` callbacks. `app/mod.rs` still owns callbacks for opening and
+applying G-code, preview zoom/fit/cursor/rendering, and TAP export. The next
+step is to move those callback groups into `file_actions.rs`,
+`preview_actions.rs`, and a new `export_actions.rs`, leaving `app/mod.rs` as
+composition only. Do not add top-level `app_*.rs` modules.
 
 The target groups code by responsibility while preserving behaviour and a
 single source of state:

@@ -3,10 +3,15 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    exporter, frame, preview, preview_input, preview_renderer, viewport::Viewport, MainWindow,
-    UiSettings,
+    domain::{frame, settings::Settings},
+    export::gcode as exporter,
+    preview::{
+        data as preview, input as preview_input, renderer as preview_renderer, viewport::Viewport,
+    },
+    MainWindow, UiSettings,
 };
 
+mod export_actions;
 mod file_actions;
 mod preview_actions;
 mod settings;
@@ -16,11 +21,11 @@ use self::state::AppState;
 
 pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     // Load settings
-    let settings = match crate::settings::Settings::load() {
+    let settings = match Settings::load() {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Warning: Could not load settings: {}", e);
-            crate::settings::Settings::default()
+            Settings::default()
         }
     };
 
@@ -499,6 +504,10 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             window.invoke_show_error(format!("Failed to export G-code: {}", e).into());
         }
     });
+
+    // File actions are installed last so this dedicated adapter owns the file
+    // callback group while the remaining callback groups are migrated.
+    self::file_actions::install_callbacks(&main_window, &app_state);
 
     // The UI callback only captures the current state. Renderer backends own
     // all drawing and receive no mutable application or UI references.

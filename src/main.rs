@@ -5,14 +5,23 @@ slint::include_modules!();
 use slint::winit_030::{winit::window::Icon, WinitWindowAccessor};
 
 mod app;
-mod exporter;
-mod frame;
-mod preview;
-mod preview_input;
-mod preview_renderer;
-mod scene;
-mod settings;
-mod viewport;
+mod domain {
+    pub mod frame;
+    pub mod gcode;
+    pub mod settings;
+}
+mod export {
+    pub mod gcode;
+}
+mod preview {
+    pub mod data;
+    pub mod input;
+    pub mod opengl_renderer;
+    pub mod renderer;
+    pub mod scene;
+    pub mod software_renderer;
+    pub mod viewport;
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     slint::BackendSelector::new()

@@ -3,11 +3,11 @@ use std::rc::Rc;
 
 use slint::ComponentHandle;
 
-use crate::frame::{BoardBounds, FrameGeometry};
-use crate::preview::PreviewData;
-use crate::preview_input::{PreviewInput, PreviewTransform};
-use crate::settings::Settings;
-use crate::viewport::Viewport;
+use crate::domain::frame::{BoardBounds, FrameGeometry};
+use crate::domain::settings::Settings;
+use crate::preview::data::PreviewData;
+use crate::preview::input::{PreviewInput, PreviewTransform};
+use crate::preview::viewport::Viewport;
 use crate::MainWindow;
 
 /// Connect pointer panning to the viewport without exposing input details to
