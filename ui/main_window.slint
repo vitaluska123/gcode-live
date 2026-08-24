@@ -1,5 +1,6 @@
 import { Button, TabWidget } from "std-widgets.slint";
 import { UiSettings } from "globals.slint";
+import { CalculationSettingsPanel } from "components/settings_panel.slint";
 import { FileInformation } from "components/file_information.slint";
 import { PreviewPanel } from "components/preview_panel.slint";
 import {
@@ -72,6 +73,13 @@ export component MainWindow inherits Window {
                 title: "Открыть настройки";
                 activated => { root.open_settings(); }
             }
+
+            MenuSeparator { }
+
+            MenuItem {
+                title: "Сохранить настройки";
+                activated => { root.save_settings(); }
+            }
         }
     }
 
@@ -83,6 +91,9 @@ export component MainWindow inherits Window {
             VerticalLayout {
                 preferred-width: 340px;
                 spacing: 12px;
+                CalculationSettingsPanel {
+                    preview_changed => { root.update_preview(); }
+                }
                 FileInformation {
                     board_width: root.board_width;
                     board_height: root.board_height;
