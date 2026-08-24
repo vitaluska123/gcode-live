@@ -3,25 +3,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::{
-    app_state::AppState, exporter, frame, preview, preview_input, preview_renderer, settings,
-    viewport::Viewport, MainWindow, UiSettings,
+    app_settings, app_state::AppState, exporter, frame, preview, preview_input, preview_renderer,
+    settings, viewport::Viewport, MainWindow, UiSettings,
 };
 
 // Slint's text editor eagerly lays out its entire value.  Keep the editor
 // responsive and avoid renderer crashes when an otherwise valid TAP is huge.
 const MAX_SOURCE_EDITOR_BYTES: usize = 10 * 1024;
-
-fn preview_color(value: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
-    let hex = value.trim().trim_start_matches('#');
-    if hex.len() != 6 {
-        return fallback;
-    }
-    let parse = |range| u8::from_str_radix(&hex[range], 16).ok();
-    match (parse(0..2), parse(2..4), parse(4..6)) {
-        (Some(r), Some(g), Some(b)) => (r, g, b),
-        _ => fallback,
-    }
-}
 
 fn source_gcode_for_editor(content: &str) -> (String, bool) {
     if content.len() <= MAX_SOURCE_EDITOR_BYTES {
@@ -51,37 +39,7 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Initialize UI with settings
-    let ui_settings = main_window.global::<UiSettings>();
-    ui_settings.set_offset_x(settings.offset_x as f32);
-    ui_settings.set_offset_y(settings.offset_y as f32);
-    ui_settings.set_tab_width(settings.tab_width as f32);
-    ui_settings.set_minimum_tabs(settings.minimum_tabs as f32);
-    ui_settings.set_maximum_tab_gap(settings.maximum_tab_gap as f32);
-    ui_settings.set_score_tabs(settings.score_tabs);
-    ui_settings.set_local_offset_enabled(settings.local_offset_enabled);
-    ui_settings.set_local_offset_x(settings.local_offset_x as f32);
-    ui_settings.set_local_offset_y(settings.local_offset_y as f32);
-    ui_settings.set_material_width(settings.material_width as f32);
-    ui_settings.set_material_height(settings.material_height as f32);
-    ui_settings.set_material_offset_x(settings.material_offset_x as f32);
-    ui_settings.set_material_offset_y(settings.material_offset_y as f32);
-    ui_settings.set_material_edge_margin_x(settings.material_edge_margin_x as f32);
-    ui_settings.set_material_edge_margin_y(settings.material_edge_margin_y as f32);
-    ui_settings.set_show_grid(settings.show_grid);
-    ui_settings.set_show_axes(settings.show_axes);
-    ui_settings.set_show_material(settings.show_material);
-    ui_settings.set_show_safe_area(settings.show_safe_area);
-    ui_settings.set_show_margin_hatch(settings.show_margin_hatch);
-    ui_settings.set_material_color(settings.material_color.clone().into());
-    ui_settings.set_safe_area_color(settings.safe_area_color.clone().into());
-    ui_settings.set_frame_color(settings.frame_color.clone().into());
-    let to_color = |value: &str, fallback| {
-        let (r, g, b) = preview_color(value, fallback);
-        slint::Color::from_rgb_u8(r, g, b)
-    };
-    ui_settings.set_material_preview_color(to_color(&settings.material_color, (190, 100, 255)));
-    ui_settings.set_safe_area_preview_color(to_color(&settings.safe_area_color, (255, 70, 70)));
-    ui_settings.set_frame_preview_color(to_color(&settings.frame_color, (255, 70, 100)));
+    app_settings::initialize_ui(main_window.global::<UiSettings>(), &settings);
 
     // State management. AppState is the single owner of the mutable model;
     // callbacks only retain references to the state fields they require.
@@ -111,34 +69,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return;
         };
 
-        let ui_settings = window.global::<UiSettings>();
-        let source_settings = settings_rc.borrow().clone();
-        let new_settings = settings::Settings {
-            offset_x: ui_settings.get_offset_x() as f64,
-            offset_y: ui_settings.get_offset_y() as f64,
-            tab_width: ui_settings.get_tab_width() as f64,
-            minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
-            maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
-            score_tabs: ui_settings.get_score_tabs(),
-            local_offset_enabled: ui_settings.get_local_offset_enabled(),
-            local_offset_x: ui_settings.get_local_offset_x() as f64,
-            local_offset_y: ui_settings.get_local_offset_y() as f64,
-            material_width: ui_settings.get_material_width() as f64,
-            material_height: ui_settings.get_material_height() as f64,
-            material_offset_x: ui_settings.get_material_offset_x() as f64,
-            material_offset_y: ui_settings.get_material_offset_y() as f64,
-            material_edge_margin_x: ui_settings.get_material_edge_margin_x().max(0.0) as f64,
-            material_edge_margin_y: ui_settings.get_material_edge_margin_y().max(0.0) as f64,
-            show_grid: ui_settings.get_show_grid(),
-            show_axes: ui_settings.get_show_axes(),
-            show_material: ui_settings.get_show_material(),
-            show_safe_area: ui_settings.get_show_safe_area(),
-            show_margin_hatch: ui_settings.get_show_margin_hatch(),
-            material_color: ui_settings.get_material_color().to_string(),
-            safe_area_color: ui_settings.get_safe_area_color().to_string(),
-            frame_color: ui_settings.get_frame_color().to_string(),
-            ..source_settings
-        };
+        let new_settings =
+            app_settings::read_ui(window.global::<UiSettings>(), settings_rc.borrow().clone());
 
         *settings_rc.borrow_mut() = new_settings.clone();
 
@@ -593,35 +525,8 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
             return;
         };
 
-        let ui_settings = window.global::<UiSettings>();
-
-        let source_settings = settings_rc.borrow().clone();
-        let new_settings = settings::Settings {
-            offset_x: ui_settings.get_offset_x() as f64,
-            offset_y: ui_settings.get_offset_y() as f64,
-            tab_width: ui_settings.get_tab_width() as f64,
-            minimum_tabs: (ui_settings.get_minimum_tabs() as f64).round().max(3.0) as usize,
-            maximum_tab_gap: ui_settings.get_maximum_tab_gap() as f64,
-            score_tabs: ui_settings.get_score_tabs(),
-            local_offset_enabled: ui_settings.get_local_offset_enabled(),
-            local_offset_x: ui_settings.get_local_offset_x() as f64,
-            local_offset_y: ui_settings.get_local_offset_y() as f64,
-            material_width: ui_settings.get_material_width() as f64,
-            material_height: ui_settings.get_material_height() as f64,
-            material_offset_x: ui_settings.get_material_offset_x() as f64,
-            material_offset_y: ui_settings.get_material_offset_y() as f64,
-            material_edge_margin_x: ui_settings.get_material_edge_margin_x().max(0.0) as f64,
-            material_edge_margin_y: ui_settings.get_material_edge_margin_y().max(0.0) as f64,
-            show_grid: ui_settings.get_show_grid(),
-            show_axes: ui_settings.get_show_axes(),
-            show_material: ui_settings.get_show_material(),
-            show_safe_area: ui_settings.get_show_safe_area(),
-            show_margin_hatch: ui_settings.get_show_margin_hatch(),
-            material_color: ui_settings.get_material_color().to_string(),
-            safe_area_color: ui_settings.get_safe_area_color().to_string(),
-            frame_color: ui_settings.get_frame_color().to_string(),
-            ..source_settings
-        };
+        let new_settings =
+            app_settings::read_ui(window.global::<UiSettings>(), settings_rc.borrow().clone());
 
         if let Err(e) = new_settings.save() {
             window.invoke_show_error(format!("Failed to save settings: {}", e).into());
