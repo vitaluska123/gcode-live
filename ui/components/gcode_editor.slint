@@ -1,0 +1,17 @@
+import { Button, TextEdit } from "std-widgets.slint";
+import { Theme } from "../styles/theme.slint";
+
+export component SourceGcodeEditor inherits VerticalLayout {
+    in-out property<string> content: ""; in property<bool> truncated: false; callback apply();
+    Text { text: "Изменения вступят в силу после нажатия «Применить»."; color: Theme.secondary_text; }
+    Text { text: "Большой файл показан частично, чтобы приложение работало стабильно."; color: Theme.warning_text; visible: root.truncated; }
+    TextEdit { text <=> root.content; font-family: "Consolas"; font-size: 14px; wrap: no-wrap; vertical-stretch: 1; }
+    HorizontalLayout { Button { text: "Применить исходный G-code"; enabled: !root.truncated; clicked => { root.apply(); } } Rectangle { horizontal-stretch: 1; } }
+}
+
+export component FinalGcodeEditor inherits VerticalLayout {
+    in-out property<string> content: ""; callback apply();
+    Text { text: "Правки влияют только на предпросмотр."; color: Theme.secondary_text; }
+    TextEdit { text <=> root.content; font-family: "Consolas"; font-size: 14px; wrap: no-wrap; vertical-stretch: 1; }
+    HorizontalLayout { Button { text: "Применить финальный G-code"; clicked => { root.apply(); } } Rectangle { horizontal-stretch: 1; } }
+}

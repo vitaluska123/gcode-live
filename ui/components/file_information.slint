@@ -1,0 +1,29 @@
+import { GroupBox } from "std-widgets.slint";
+
+export component FileInformation inherits GroupBox {
+    in property<string> board_width: "";
+    in property<string> board_height: "";
+    in property<string> x_min: "";
+    in property<string> x_max: "";
+    in property<string> y_min: "";
+    in property<string> y_max: "";
+    in property<string> frame_width: "";
+    in property<string> frame_height: "";
+
+    title: "Сведения о файле";
+    VerticalLayout {
+        padding: 8px;
+        spacing: 5px;
+        Text { text: "Размеры платы"; font-weight: 600; }
+        HorizontalLayout { Text { text: "Ширина:"; } Text { text: root.board_width; horizontal-alignment: right; horizontal-stretch: 1; } }
+        HorizontalLayout { Text { text: "Высота:"; } Text { text: root.board_height; horizontal-alignment: right; horizontal-stretch: 1; } }
+        Text { text: "Границы платы"; font-weight: 600; }
+        HorizontalLayout { Text { text: "Мин. X:"; } Text { text: root.x_min; horizontal-alignment: right; horizontal-stretch: 1; } }
+        HorizontalLayout { Text { text: "Макс. X:"; } Text { text: root.x_max; horizontal-alignment: right; horizontal-stretch: 1; } }
+        HorizontalLayout { Text { text: "Мин. Y:"; } Text { text: root.y_min; horizontal-alignment: right; horizontal-stretch: 1; } }
+        HorizontalLayout { Text { text: "Макс. Y:"; } Text { text: root.y_max; horizontal-alignment: right; horizontal-stretch: 1; } }
+        Text { text: "Размеры рамки"; font-weight: 600; }
+        HorizontalLayout { Text { text: "Ширина:"; } Text { text: root.frame_width; horizontal-alignment: right; horizontal-stretch: 1; } }
+        HorizontalLayout { Text { text: "Высота:"; } Text { text: root.frame_height; horizontal-alignment: right; horizontal-stretch: 1; } }
+    }
+}

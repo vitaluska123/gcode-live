@@ -1,0 +1,14 @@
+import { Button } from "std-widgets.slint";
+
+export component AppHeader inherits HorizontalLayout {
+    callback open_file();
+    callback save_settings();
+    callback export_file();
+    in property<bool> file_loaded: false;
+
+    padding: 8px;
+    Button { text: "Открыть TAP"; clicked => { root.open_file(); } }
+    Button { text: "Сохранить настройки"; clicked => { root.save_settings(); } }
+    Button { text: "Экспортировать TAP"; enabled: root.file_loaded; clicked => { root.export_file(); } }
+    Rectangle { horizontal-stretch: 1; }
+}
