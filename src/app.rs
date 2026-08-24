@@ -2,39 +2,14 @@ use slint::ComponentHandle;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::viewport::Viewport;
 use crate::{
-    exporter, frame, preview, preview_input, preview_renderer, scene::PreviewScene, settings,
-    MainWindow, UiSettings,
+    app_state::AppState, exporter, frame, preview, preview_input, preview_renderer, settings,
+    viewport::Viewport, MainWindow, UiSettings,
 };
 
 // Slint's text editor eagerly lays out its entire value.  Keep the editor
 // responsive and avoid renderer crashes when an otherwise valid TAP is huge.
 const MAX_SOURCE_EDITOR_BYTES: usize = 10 * 1024;
-
-/// Mutable model owned by the application. UI callbacks share this one state
-/// container instead of independently owning parts of the model.
-struct AppState {
-    preview_scene: Rc<PreviewScene>,
-    source_home: Rc<RefCell<Option<(f64, f64)>>>,
-    source_file_stem: Rc<RefCell<Option<String>>>,
-    viewport: Rc<RefCell<Viewport>>,
-    preview_input: Rc<RefCell<preview_input::PreviewInput>>,
-    settings: Rc<RefCell<settings::Settings>>,
-}
-
-impl AppState {
-    fn new(settings: settings::Settings) -> Self {
-        Self {
-            preview_scene: Rc::new(PreviewScene::new()),
-            source_home: Rc::new(RefCell::new(None)),
-            source_file_stem: Rc::new(RefCell::new(None)),
-            viewport: Rc::new(RefCell::new(Viewport::default())),
-            preview_input: Rc::new(RefCell::new(preview_input::PreviewInput::default())),
-            settings: Rc::new(RefCell::new(settings)),
-        }
-    }
-}
 
 fn preview_color(value: &str, fallback: (u8, u8, u8)) -> (u8, u8, u8) {
     let hex = value.trim().trim_start_matches('#');
