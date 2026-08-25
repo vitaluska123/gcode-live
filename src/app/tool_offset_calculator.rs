@@ -47,14 +47,10 @@ pub(crate) fn install_callbacks(
 
     let calculator_window = calculator_window.clone_strong();
     let main_window_weak = main_window.as_weak();
-    let settings_weak = Rc::downgrade(&app_state.settings);
     main_window.on_open_offset_calculator(move || {
-        let (Some(main_window), Some(settings)) =
-            (main_window_weak.upgrade(), settings_weak.upgrade())
-        else {
+        let Some(main_window) = main_window_weak.upgrade() else {
             return;
         };
-        calculator_window.set_mill_diameter(format_value(settings.borrow().tool_diameter).into());
         update_results(&calculator_window);
         if let Err(error) = calculator_window.show() {
             main_window
@@ -65,8 +61,6 @@ pub(crate) fn install_callbacks(
 
 fn inputs_from(window: &ToolOffsetCalculatorWindow) -> ToolOffsetInputs {
     ToolOffsetInputs {
-        mill_diameter: parse_input(window.get_mill_diameter().as_str()),
-        material_thickness: parse_input(window.get_material_thickness().as_str()),
         indicator_x: parse_input(window.get_indicator_x().as_str()),
         indicator_y: parse_input(window.get_indicator_y().as_str()),
         clamp_x: parse_input(window.get_clamp_x().as_str()),

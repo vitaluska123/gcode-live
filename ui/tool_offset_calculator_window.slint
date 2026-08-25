@@ -12,14 +12,12 @@ component ResultField inherits LineEdit {
 }
 
 export component ToolOffsetCalculatorWindow inherits Window {
-    min-width: 620px;
-    min-height: 560px;
-    preferred-width: 680px;
-    preferred-height: 700px;
+    min-width: 880px;
+    min-height: 720px;
+    preferred-width: 980px;
+    preferred-height: 760px;
     title: "Расчёт отступов";
 
-    in-out property <string> mill_diameter: "3.175";
-    in-out property <string> material_thickness: "1.5";
     in-out property <string> indicator_x: "0";
     in-out property <string> indicator_y: "0";
     in-out property <string> clamp_x: "0";
@@ -41,18 +39,29 @@ export component ToolOffsetCalculatorWindow inherits Window {
         padding: 12px;
         spacing: 12px;
 
-        GroupBox {
-            title: "Входные данные";
+        HorizontalLayout {
+            vertical-stretch: 1;
             VerticalLayout {
-                spacing: 6px;
-                HorizontalLayout { vertical-stretch: 0; Text { text: "Диаметр фрезы (мм):"; vertical-alignment: center; } NumericInput { text <=> root.mill_diameter; accepted => { root.recalculate(); } } }
-                HorizontalLayout { vertical-stretch: 0; Text { text: "Толщина текстолита (мм):"; vertical-alignment: center; } NumericInput { text <=> root.material_thickness; accepted => { root.recalculate(); } } }
-                Text { text: "Расстояние от концевика до центра фрезы (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
-                HorizontalLayout { vertical-stretch: 0; Text { text: "Индикатор X:"; vertical-alignment: center; } NumericInput { text <=> root.indicator_x; accepted => { root.recalculate(); } } Text { text: "Индикатор Y:"; vertical-alignment: center; } NumericInput { text <=> root.indicator_y; accepted => { root.recalculate(); } } }
-                Text { text: "Нажим зажимов на текстолит (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
-                HorizontalLayout { vertical-stretch: 0; Text { text: "Зажим X:"; vertical-alignment: center; } NumericInput { text <=> root.clamp_x; accepted => { root.recalculate(); } } Text { text: "Зажим Y:"; vertical-alignment: center; } NumericInput { text <=> root.clamp_y; accepted => { root.recalculate(); } } }
-                Text { text: "Безопасный зазор от края зажима (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
-                HorizontalLayout { vertical-stretch: 0; Text { text: "Зазор X:"; vertical-alignment: center; } NumericInput { text <=> root.safety_x; accepted => { root.recalculate(); } } Text { text: "Зазор Y:"; vertical-alignment: center; } NumericInput { text <=> root.safety_y; accepted => { root.recalculate(); } } }
+                GroupBox {
+                    title: "Входные данные";
+                    VerticalLayout {
+                        spacing: 6px;
+                        Text { text: "Расстояние от концевика до центра фрезы (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
+                        HorizontalLayout { vertical-stretch: 0; Text { text: "Индикатор X:"; vertical-alignment: center; } NumericInput { text <=> root.indicator_x; accepted => { root.recalculate(); } } Text { text: "Индикатор Y:"; vertical-alignment: center; } NumericInput { text <=> root.indicator_y; accepted => { root.recalculate(); } } }
+                        Text { text: "Нажим зажимов на текстолит (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
+                        HorizontalLayout { vertical-stretch: 0; Text { text: "Зажим X:"; vertical-alignment: center; } NumericInput { text <=> root.clamp_x; accepted => { root.recalculate(); } } Text { text: "Зажим Y:"; vertical-alignment: center; } NumericInput { text <=> root.clamp_y; accepted => { root.recalculate(); } } }
+                        Text { text: "Безопасный зазор от края зажима (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
+                        HorizontalLayout { vertical-stretch: 0; Text { text: "Зазор X:"; vertical-alignment: center; } NumericInput { text <=> root.safety_x; accepted => { root.recalculate(); } } Text { text: "Зазор Y:"; vertical-alignment: center; } NumericInput { text <=> root.safety_y; accepted => { root.recalculate(); } } }
+                        FocusScope { vertical-stretch: 1; }
+                    }
+                }
+            }
+
+            Image {
+                source: @image-url("../images/calc_preview.svg");
+                image-fit: contain;
+                horizontal-stretch: 1;
+                vertical-stretch: 1;
             }
         }
 

@@ -3,8 +3,6 @@ pub const REFERENCE_OFFSET_MM: f64 = 3.064;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ToolOffsetInputs {
-    pub mill_diameter: f64,
-    pub material_thickness: f64,
     pub indicator_x: f64,
     pub indicator_y: f64,
     pub clamp_x: f64,
@@ -27,8 +25,7 @@ pub struct ToolOffsetResults {
 
 impl ToolOffsetInputs {
     pub fn calculate(self) -> ToolOffsetResults {
-        let material_offset =
-            |indicator| indicator - self.material_thickness - self.mill_diameter * 0.5;
+        let material_offset = |indicator| indicator;
         let edge_margin = |clamp, safety| clamp + safety + REFERENCE_OFFSET_MM;
 
         let material_offset_x = material_offset(self.indicator_x);
@@ -56,8 +53,6 @@ mod tests {
     #[test]
     fn calculates_gerber_and_application_offsets() {
         let results = ToolOffsetInputs {
-            mill_diameter: 3.0,
-            material_thickness: 1.5,
             indicator_x: 20.0,
             indicator_y: 30.0,
             clamp_x: 4.0,
@@ -67,12 +62,12 @@ mod tests {
         }
         .calculate();
 
-        assert_eq!(results.material_offset_x, 17.0);
-        assert_eq!(results.material_offset_y, 27.0);
+        assert_eq!(results.material_offset_x, 20.0);
+        assert_eq!(results.material_offset_y, 30.0);
         assert!((results.material_edge_margin_x - 9.064).abs() < 0.000_001);
         assert!((results.material_edge_margin_y - 11.064).abs() < 0.000_001);
-        assert!((results.program_zero_x - 26.064).abs() < 0.000_001);
-        assert!((results.program_zero_y - 38.064).abs() < 0.000_001);
+        assert!((results.program_zero_x - 29.064).abs() < 0.000_001);
+        assert!((results.program_zero_y - 41.064).abs() < 0.000_001);
         assert_eq!(results.program_home_x, REFERENCE_OFFSET_MM);
         assert_eq!(results.program_home_y, REFERENCE_OFFSET_MM);
     }
