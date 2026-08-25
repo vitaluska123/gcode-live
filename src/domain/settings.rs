@@ -13,6 +13,8 @@ pub struct Settings {
     pub material: MaterialSettings,
     #[serde(default)]
     pub display: DisplaySettings,
+    #[serde(default = "default_use_opengl_renderer")]
+    pub use_opengl_renderer: bool,
     #[serde(skip_serializing, default)]
     pub machining: MachiningSettings,
     #[serde(skip)]
@@ -220,6 +222,7 @@ impl Default for Settings {
             coordinates: CoordinateSettings::default(),
             material: MaterialSettings::default(),
             display: DisplaySettings::default(),
+            use_opengl_renderer: true,
             machining: MachiningSettings::default(),
             offset_x: 0.0,
             offset_y: 0.0,
@@ -272,6 +275,10 @@ impl Default for Settings {
         settings
     }
 }
+fn default_use_opengl_renderer() -> bool {
+    true
+}
+
 impl Default for CalculationSettings {
     fn default() -> Self {
         Self {

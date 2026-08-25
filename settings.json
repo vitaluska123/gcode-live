@@ -80,5 +80,6 @@
         "color": "#ffdc46"
       }
     }
-  }
+  },
+  "use_opengl_renderer": true
 }

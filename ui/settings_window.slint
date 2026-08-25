@@ -1,5 +1,6 @@
-import { Button } from "std-widgets.slint";
+import { Button, CheckBox } from "std-widgets.slint";
 import { RenderSettingsPanel } from "components/settings_panel.slint";
+import { UiSettings } from "globals.slint";
 
 export component SettingsWindow inherits Window {
     min-width: 560px;
@@ -14,6 +15,19 @@ export component SettingsWindow inherits Window {
     VerticalLayout {
         padding: 12px;
         spacing: 12px;
+
+        VerticalLayout {
+            vertical-stretch: 0;
+            CheckBox {
+                text: "Использовать OpenGL для предпросмотра";
+                checked <=> UiSettings.use_opengl_renderer;
+            }
+            Text {
+                text: "Изменение применяется после перезапуска приложения.";
+                color: #96a0af;
+                font-size: 12px;
+            }
+        }
 
         RenderSettingsPanel {
             horizontal-stretch: 1;

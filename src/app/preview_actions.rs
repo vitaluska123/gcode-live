@@ -94,8 +94,21 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
     let current_settings = app_state.settings.clone();
 
     let renderer = Rc::new(RefCell::new(
-        preview_renderer::PreviewRendererBackend::default(),
+        preview_renderer::PreviewRendererBackend::from_settings(
+            current_settings.borrow().use_opengl_renderer,
+        ),
     ));
+    let notifier_renderer = renderer.clone();
+    let notifier_window = main_window.as_weak();
+    let _ = main_window
+        .window()
+        .set_rendering_notifier(move |state, api| {
+            if let Some(image) = notifier_renderer.borrow_mut().notify(state, api) {
+                if let Some(window) = notifier_window.upgrade() {
+                    window.set_preview_image(image);
+                }
+            }
+        });
     let weak_scene = Rc::downgrade(&preview_scene);
     let weak_viewport = Rc::downgrade(&viewport);
     let weak_settings = Rc::downgrade(&current_settings);

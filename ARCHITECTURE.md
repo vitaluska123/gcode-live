@@ -26,8 +26,8 @@ viewport, settings, or Slint UI state.
 
 Slint's winit/FemtoVG backend owns the native OpenGL context and presentation
 surface. The project also compiles Slint's software backend, which Slint can
-use when OpenGL is unavailable. `CNC_PREVIEW_RENDERER=software` selects the
-application-level software preview backend explicitly.
+use when OpenGL is unavailable. The persisted preview-renderer setting selects
+the application-level OpenGL or software backend and applies after restart.
 
 ## UI composition
 

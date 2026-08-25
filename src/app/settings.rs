@@ -10,6 +10,7 @@ use crate::{
 
 /// Populate Slint's settings bridge from the persisted application settings.
 pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
+    ui_settings.set_use_opengl_renderer(settings.use_opengl_renderer);
     ui_settings.set_offset_x(settings.offset_x as f32);
     ui_settings.set_offset_y(settings.offset_y as f32);
     ui_settings.set_tab_width(settings.tab_width as f32);
@@ -83,6 +84,7 @@ pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
 /// Copy UI values into a new settings value while retaining non-UI fields.
 pub(crate) fn read_ui(ui_settings: UiSettings, source: Settings) -> Settings {
     Settings {
+        use_opengl_renderer: ui_settings.get_use_opengl_renderer(),
         offset_x: ui_settings.get_offset_x() as f64,
         offset_y: ui_settings.get_offset_y() as f64,
         tab_width: ui_settings.get_tab_width() as f64,

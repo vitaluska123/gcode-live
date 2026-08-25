@@ -11,6 +11,11 @@ serde_json = "1.0"
 rfd = "0.17.2"
 thiserror = "2.0.20"
 image = { version = "0.25", default-features = false, features = ["png"] }
+# Used with the OpenGL context owned by Slint/FemtoVG. This crate is already a
+# transitive dependency of the selected Slint renderer and adds no windowing
+# or context implementation of its own.
+glow = "0.18"
+euclid = "0.22"
 
 [[bin]]
 name = "pcb-frame-generator"
