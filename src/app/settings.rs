@@ -20,6 +20,7 @@ pub(crate) fn initialize_ui(ui_settings: UiSettings, settings: &Settings) {
     ui_settings.set_local_offset_enabled(settings.local_offset_enabled);
     ui_settings.set_local_offset_x(settings.local_offset_x as f32);
     ui_settings.set_local_offset_y(settings.local_offset_y as f32);
+    ui_settings.set_snap_to_geometry(settings.snap_to_geometry);
     ui_settings.set_material_width(settings.material_width as f32);
     ui_settings.set_material_height(settings.material_height as f32);
     ui_settings.set_material_offset_x(settings.material_offset_x as f32);
@@ -94,6 +95,7 @@ pub(crate) fn read_ui(ui_settings: UiSettings, source: Settings) -> Settings {
         local_offset_enabled: ui_settings.get_local_offset_enabled(),
         local_offset_x: ui_settings.get_local_offset_x() as f64,
         local_offset_y: ui_settings.get_local_offset_y() as f64,
+        snap_to_geometry: ui_settings.get_snap_to_geometry(),
         material_width: ui_settings.get_material_width() as f64,
         material_height: ui_settings.get_material_height() as f64,
         material_offset_x: ui_settings.get_material_offset_x() as f64,

@@ -7,15 +7,27 @@ export component PreviewPanel inherits VerticalLayout {
     in-out property<float> preview_height: 1.0;
     in property<string> cursor_coordinates: "X: —   Y: —";
     in property<bool> file_loaded: false;
-    callback open_file(); callback size_changed(); callback begin_pan(float, float); callback pan(float, float); callback cursor_moved(float, float, float, float); callback zoom(int, float, float, float, float); callback fit();
+    in property<bool> ruler_active: false;
+    in property<bool> ruler_visible: false;
+    in property<float> ruler_start_x: 0.0;
+    in property<float> ruler_start_y: 0.0;
+    in property<float> ruler_end_x: 0.0;
+    in property<float> ruler_end_y: 0.0;
+    in property<string> ruler_distance: "";
+    callback open_file(); callback size_changed(); callback begin_pan(float, float); callback pan(float, float); callback cursor_moved(float, float, float, float); callback ruler_click(float, float, float, float); callback zoom(int, float, float, float, float); callback fit();
     spacing: 6px;
     Rectangle { horizontal-stretch: 1; vertical-stretch: 1;
         changed width => { if (self.width > 1px) { root.preview_width = self.width / 1px; root.size_changed(); } }
         changed height => { if (self.height > 1px) { root.preview_height = self.height / 1px; root.size_changed(); } }
         Image { source: root.preview_image; width: 100%; height: 100%; image-fit: contain; }
-        TouchArea { mouse-cursor: grab;
-            pointer-event(event) => { if (event.kind == PointerEventKind.down) { root.begin_pan(self.mouse-x / 1px, self.mouse-y / 1px); } if (event.kind == PointerEventKind.move) { root.cursor_moved(self.mouse-x / 1px, self.mouse-y / 1px, self.width / 1px, self.height / 1px); } }
-            moved => { root.pan(self.mouse-x / 1px, self.mouse-y / 1px); }
+        Path { visible: root.ruler_visible; stroke: #ffd200; stroke-width: 2px; MoveTo { x: root.ruler_start_x; y: root.ruler_start_y; } LineTo { x: root.ruler_end_x; y: root.ruler_end_y; } }
+        Rectangle { visible: root.ruler_visible; x: root.ruler_start_x * 1px - 4px; y: root.ruler_start_y * 1px - 4px; width: 8px; height: 8px; border-radius: 4px; background: #ffd200; }
+        Rectangle { visible: root.ruler_visible; x: root.ruler_end_x * 1px - 4px; y: root.ruler_end_y * 1px - 4px; width: 8px; height: 8px; border-radius: 4px; background: #ffd200; }
+        Text { visible: root.ruler_visible; text: root.ruler_distance; x: (root.ruler_start_x + root.ruler_end_x) * 0.5 * 1px + 8px; y: (root.ruler_start_y + root.ruler_end_y) * 0.5 * 1px - 18px; color: #ffd200; }
+        TouchArea { mouse-cursor: root.ruler_active ? crosshair : grab;
+            pointer-event(event) => { if (event.kind == PointerEventKind.down && !root.ruler_active) { root.begin_pan(self.mouse-x / 1px, self.mouse-y / 1px); } if (event.kind == PointerEventKind.move) { root.cursor_moved(self.mouse-x / 1px, self.mouse-y / 1px, self.width / 1px, self.height / 1px); } }
+            moved => { if (!root.ruler_active) { root.pan(self.mouse-x / 1px, self.mouse-y / 1px); } }
+            clicked => { if (root.ruler_active) { root.ruler_click(self.mouse-x / 1px, self.mouse-y / 1px, self.width / 1px, self.height / 1px); } }
             scroll-event(event) => { if (event.delta-y < 0) { root.zoom(-1, self.mouse-x / 1px, self.mouse-y / 1px, self.width / 1px, self.height / 1px); } else { root.zoom(1, self.mouse-x / 1px, self.mouse-y / 1px, self.width / 1px, self.height / 1px); } accept }
         }
         Button {

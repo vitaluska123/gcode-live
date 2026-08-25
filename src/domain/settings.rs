@@ -28,6 +28,8 @@ pub struct Settings {
     #[serde(skip)]
     pub local_offset_y: f64,
     #[serde(skip)]
+    pub snap_to_geometry: bool,
+    #[serde(skip)]
     pub material_width: f64,
     #[serde(skip)]
     pub material_height: f64,
@@ -133,6 +135,8 @@ pub struct CoordinateSettings {
     pub local_origin_x: f64,
     #[serde(default)]
     pub local_origin_y: f64,
+    #[serde(default = "default_true")]
+    pub snap_to_geometry: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialSettings {
@@ -229,6 +233,7 @@ impl Default for Settings {
             local_offset_enabled: false,
             local_offset_x: 0.0,
             local_offset_y: 0.0,
+            snap_to_geometry: true,
             material_width: 0.0,
             material_height: 0.0,
             material_offset_x: 0.0,
@@ -304,6 +309,7 @@ impl Default for CoordinateSettings {
             local_origin_enabled: false,
             local_origin_x: 0.0,
             local_origin_y: 0.0,
+            snap_to_geometry: true,
         }
     }
 }
@@ -392,6 +398,7 @@ impl Settings {
         self.local_offset_enabled = self.coordinates.local_origin_enabled;
         self.local_offset_x = self.coordinates.local_origin_x;
         self.local_offset_y = self.coordinates.local_origin_y;
+        self.snap_to_geometry = self.coordinates.snap_to_geometry;
         self.material_width = self.material.width;
         self.material_height = self.material.height;
         self.material_offset_x = self.material.offset_x;
@@ -443,6 +450,7 @@ impl Settings {
             local_origin_enabled: self.local_offset_enabled,
             local_origin_x: self.local_offset_x,
             local_origin_y: self.local_offset_y,
+            snap_to_geometry: self.snap_to_geometry,
         };
         self.material = MaterialSettings {
             width: self.material_width,
@@ -669,6 +677,7 @@ impl LegacySettings {
                 local_origin_enabled: legacy.local_offset_enabled,
                 local_origin_x: legacy.local_offset_x,
                 local_origin_y: legacy.local_offset_y,
+                snap_to_geometry: true,
             },
             material: MaterialSettings {
                 width: legacy.material_width,

@@ -13,7 +13,8 @@
   "coordinates": {
     "local_origin_enabled": false,
     "local_origin_x": -40.0,
-    "local_origin_y": 6.0
+    "local_origin_y": 6.0,
+    "snap_to_geometry": true
   },
   "material": {
     "width": 150.0,

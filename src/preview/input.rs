@@ -7,6 +7,33 @@ pub struct PreviewInput {
     last_pointer: Option<(f64, f64)>,
 }
 
+/// Two world-space points selected by the measurement tool.
+#[derive(Default)]
+pub struct RulerMeasurement {
+    pub active: bool,
+    pub start: Option<(f64, f64)>,
+    pub end: Option<(f64, f64)>,
+}
+
+impl RulerMeasurement {
+    pub fn toggle(&mut self) {
+        self.active = !self.active;
+        if !self.active {
+            self.start = None;
+            self.end = None;
+        }
+    }
+
+    pub fn place_point(&mut self, point: (f64, f64)) {
+        if self.start.is_none() || self.end.is_some() {
+            self.start = Some(point);
+            self.end = None;
+        } else {
+            self.end = Some(point);
+        }
+    }
+}
+
 impl PreviewInput {
     pub fn begin_pan(&mut self, x: f64, y: f64) {
         self.last_pointer = Some((x, y));
@@ -65,6 +92,22 @@ impl PreviewTransform {
         viewport.pan_x = x - (self.width - content_width * scale) / 2.0 - (world_x - min_x) * scale;
         viewport.pan_y =
             y - (self.height + content_height * scale) / 2.0 + (world_y - min_y) * scale;
+    }
+
+    pub fn world_to_screen(&self, viewport: Viewport, point: (f64, f64)) -> (f64, f64) {
+        let scale = self.scale(viewport);
+        let (x, y) = self.data.world_to_screen(
+            point.0,
+            point.1,
+            scale,
+            self.width as f32,
+            self.height as f32,
+        );
+        (x as f64 + viewport.pan_x, y as f64 + viewport.pan_y)
+    }
+
+    pub fn world_per_pixel(&self, viewport: Viewport) -> f64 {
+        self.scale(viewport).recip()
     }
 
     fn scale(&self, viewport: Viewport) -> f64 {

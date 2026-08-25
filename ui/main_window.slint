@@ -28,6 +28,13 @@ export component MainWindow inherits Window {
     in-out property <float> preview_width: 1.0;
     in-out property <float> preview_height: 1.0;
     in-out property <string> cursor_coordinates: "X: —   Y: —";
+    in-out property <bool> ruler_active: false;
+    in-out property <bool> ruler_visible: false;
+    in-out property <float> ruler_start_x: 0.0;
+    in-out property <float> ruler_start_y: 0.0;
+    in-out property <float> ruler_end_x: 0.0;
+    in-out property <float> ruler_end_y: 0.0;
+    in-out property <string> ruler_distance: "";
     in-out property <int> active_tab: 0;
     in-out property <string> source_gcode: "";
     in-out property <bool> source_gcode_truncated: false;
@@ -39,16 +46,19 @@ export component MainWindow inherits Window {
     callback show_error(string);
     callback sync_settings();
     callback update_preview();
+    callback update_ruler_overlay();
     callback render_preview(float, float) -> image;
     callback zoom_preview(int, float, float, float, float);
     callback fit_preview();
     callback begin_pan(float, float);
     callback pan_preview(float, float);
     callback cursor_moved(float, float, float, float);
+    callback ruler_click(float, float, float, float);
+    callback toggle_ruler();
     callback apply_source_gcode();
     callback apply_final_gcode();
 
-    update_preview => { sync_settings(); if (root.active_tab == 0) { preview_image = render_preview(root.preview_width, root.preview_height); } }
+    update_preview => { sync_settings(); update_ruler_overlay(); if (root.active_tab == 0) { preview_image = render_preview(root.preview_width, root.preview_height); } }
 
     MenuBar {
         Menu {
@@ -64,6 +74,13 @@ export component MainWindow inherits Window {
                 title: "Экспортировать TAP…";
                 enabled: root.file_loaded;
                 activated => { root.export_tap(); }
+            }
+        }
+        Menu {
+            title: "Инструменты";
+            MenuItem {
+                title: root.ruler_active ? "Линейка: включена" : "Линейка";
+                activated => { root.toggle_ruler(); }
             }
         }
 
@@ -131,12 +148,20 @@ export component MainWindow inherits Window {
                             preview_width <=> root.preview_width;
                             preview_height <=> root.preview_height;
                             cursor_coordinates: root.cursor_coordinates;
+                            ruler_active: root.ruler_active;
+                            ruler_visible: root.ruler_visible;
+                            ruler_start_x: root.ruler_start_x;
+                            ruler_start_y: root.ruler_start_y;
+                            ruler_end_x: root.ruler_end_x;
+                            ruler_end_y: root.ruler_end_y;
+                            ruler_distance: root.ruler_distance;
                             file_loaded: root.file_loaded;
                             open_file => { root.open_tap_file(); }
                             size_changed => { root.update_preview(); }
                             begin_pan(x, y) => { root.begin_pan(x, y); }
                             pan(x, y) => { root.pan_preview(x, y); }
                             cursor_moved(x, y, width, height) => { root.cursor_moved(x, y, width, height); }
+                            ruler_click(x, y, width, height) => { root.ruler_click(x, y, width, height); }
                             zoom(direction, x, y, width, height) => { root.zoom_preview(direction, x, y, width, height); }
                             fit => { root.fit_preview(); }
                         }

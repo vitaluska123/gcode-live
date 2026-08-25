@@ -12,6 +12,9 @@ use crate::preview::viewport::Viewport;
 use crate::preview::{data as preview, input as preview_input, renderer as preview_renderer};
 use crate::MainWindow;
 
+const SNAP_RADIUS_PX: f64 = 12.0;
+const GRID_TARGET_SPACING_PX: f64 = 80.0;
+
 /// Connect pointer panning to the viewport without exposing input details to
 /// the application composition module.
 pub(crate) fn install_pan_callbacks(
@@ -43,6 +46,7 @@ pub(crate) fn cursor_text(
     viewport: Viewport,
     screen: (f32, f32),
     size: (f32, f32),
+    paths: &[&[(f64, f64)]],
 ) -> Option<String> {
     let (shift_x, shift_y) = settings.local_offset();
     let expanded = FrameGeometry::expanded(bounds, settings);
@@ -73,8 +77,8 @@ pub(crate) fn cursor_text(
         settings.material_offset_y,
     );
     let transform = PreviewTransform::new(data, size.0, size.1)?;
-    let (world_x, world_y) =
-        transform.screen_to_world(viewport, screen.0 as f64, screen.1 as f64)?;
+    let point = transform.screen_to_world(viewport, screen.0 as f64, screen.1 as f64)?;
+    let (world_x, world_y) = snap_point(point, &transform, viewport, settings, paths);
     Some(if settings.local_offset_enabled {
         format!(
             "Локальные: X: {:.3}   Y: {:.3}\nГлобальные: X: {world_x:.3}   Y: {world_y:.3}",
@@ -86,12 +90,142 @@ pub(crate) fn cursor_text(
     })
 }
 
+fn measurement_transform(
+    bounds: &BoardBounds,
+    frame: &FrameGeometry,
+    settings: &Settings,
+    size: (f32, f32),
+) -> Option<PreviewTransform> {
+    let (shift_x, shift_y) = settings.local_offset();
+    let expanded = FrameGeometry::expanded(bounds, settings);
+    let data = PreviewData::from_bounds_with_material(
+        bounds.x_min + shift_x,
+        bounds.x_max + shift_x,
+        bounds.y_min + shift_y,
+        bounds.y_max + shift_y,
+        expanded
+            .as_ref()
+            .map_or(frame.left, |value| frame.left.min(value.left))
+            + shift_x,
+        expanded
+            .as_ref()
+            .map_or(frame.right, |value| frame.right.max(value.right))
+            + shift_x,
+        expanded
+            .as_ref()
+            .map_or(frame.bottom, |value| frame.bottom.min(value.bottom))
+            + shift_y,
+        expanded
+            .as_ref()
+            .map_or(frame.top, |value| frame.top.max(value.top))
+            + shift_y,
+        settings.material_width,
+        settings.material_height,
+        settings.material_offset_x,
+        settings.material_offset_y,
+    );
+    PreviewTransform::new(data, size.0, size.1)
+}
+
+fn nice_grid_step(target: f64) -> f64 {
+    let base = 10_f64.powf(target.max(f64::MIN_POSITIVE).log10().floor());
+    [1.0, 2.0, 5.0, 10.0]
+        .into_iter()
+        .map(|factor| factor * base)
+        .find(|step| *step >= target)
+        .unwrap_or(base * 10.0)
+}
+
+fn snap_point(
+    point: (f64, f64),
+    transform: &PreviewTransform,
+    viewport: Viewport,
+    settings: &Settings,
+    paths: &[&[(f64, f64)]],
+) -> (f64, f64) {
+    if !settings.snap_to_geometry {
+        return point;
+    }
+    let tolerance = SNAP_RADIUS_PX * transform.world_per_pixel(viewport);
+    let grid_step = nice_grid_step(GRID_TARGET_SPACING_PX * transform.world_per_pixel(viewport));
+    let mut best = (
+        (point.0 / grid_step).round() * grid_step,
+        (point.1 / grid_step).round() * grid_step,
+    );
+    let mut best_distance = (best.0 - point.0).hypot(best.1 - point.1);
+    for path in paths {
+        for &(x, y) in *path {
+            let candidate = (x + settings.local_offset().0, y + settings.local_offset().1);
+            let distance = (candidate.0 - point.0).hypot(candidate.1 - point.1);
+            if distance < best_distance {
+                best = candidate;
+                best_distance = distance;
+            }
+        }
+        for segment in path.windows(2) {
+            let start = (
+                segment[0].0 + settings.local_offset().0,
+                segment[0].1 + settings.local_offset().1,
+            );
+            let end = (
+                segment[1].0 + settings.local_offset().0,
+                segment[1].1 + settings.local_offset().1,
+            );
+            let direction = (end.0 - start.0, end.1 - start.1);
+            let length_squared = direction.0.mul_add(direction.0, direction.1 * direction.1);
+            if length_squared <= f64::EPSILON {
+                continue;
+            }
+            let offset = (point.0 - start.0, point.1 - start.1);
+            let position = (offset.0.mul_add(direction.0, offset.1 * direction.1) / length_squared)
+                .clamp(0.0, 1.0);
+            let candidate = (
+                start.0 + direction.0 * position,
+                start.1 + direction.1 * position,
+            );
+            let distance = (candidate.0 - point.0).hypot(candidate.1 - point.1);
+            if distance < best_distance {
+                best = candidate;
+                best_distance = distance;
+            }
+        }
+    }
+    if best_distance <= tolerance {
+        best
+    } else {
+        point
+    }
+}
+
+fn update_ruler_ui(
+    window: &MainWindow,
+    ruler: &crate::preview::input::RulerMeasurement,
+    transform: &PreviewTransform,
+    viewport: Viewport,
+) {
+    window.set_ruler_active(ruler.active);
+    let Some(start) = ruler.start else {
+        window.set_ruler_visible(false);
+        return;
+    };
+    let end = ruler.end.unwrap_or(start);
+    let (start_x, start_y) = transform.world_to_screen(viewport, start);
+    let (end_x, end_y) = transform.world_to_screen(viewport, end);
+    window.set_ruler_visible(true);
+    window.set_ruler_start_x(start_x as f32);
+    window.set_ruler_start_y(start_y as f32);
+    window.set_ruler_end_x(end_x as f32);
+    window.set_ruler_end_y(end_y as f32);
+    window.set_ruler_distance(format!("{:.3} мм", (end.0 - start.0).hypot(end.1 - start.1)).into());
+}
+
 pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app::state::AppState) {
     let preview_scene = app_state.preview_scene.clone();
     let board_bounds = preview_scene.board_bounds.clone();
     let frame_geometry = preview_scene.frame_geometry.clone();
     let viewport = app_state.viewport.clone();
     let preview_input = app_state.preview_input.clone();
+    let ruler = app_state.ruler.clone();
     let current_settings = app_state.settings.clone();
 
     let renderer = Rc::new(RefCell::new(
@@ -132,6 +266,41 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
         };
         let image = renderer.borrow_mut().render(&frame);
         image
+    });
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
+    let weak_viewport = Rc::downgrade(&viewport);
+    let ruler_state = ruler.clone();
+    let window_weak = main_window.as_weak();
+    main_window.on_update_ruler_overlay(move || {
+        let (Some(window), Some(board), Some(frame), Some(settings), Some(viewport)) = (
+            window_weak.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_settings.upgrade(),
+            weak_viewport.upgrade(),
+        ) else {
+            return;
+        };
+        let (Some(bounds), Some(frame)) = (board.borrow().clone(), frame.borrow().clone()) else {
+            return;
+        };
+        let settings = settings.borrow().clone();
+        let Some(transform) = measurement_transform(
+            &bounds,
+            &frame,
+            &settings,
+            (window.get_preview_width(), window.get_preview_height()),
+        ) else {
+            return;
+        };
+        update_ruler_ui(
+            &window,
+            &ruler_state.borrow(),
+            &transform,
+            *viewport.borrow(),
+        );
     });
     let viewport_state = viewport.clone();
     let weak_board = Rc::downgrade(&board_bounds);
@@ -257,6 +426,83 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
     install_pan_callbacks(main_window, preview_input.clone(), viewport.clone());
     let weak_board = Rc::downgrade(&board_bounds);
     let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
+    let weak_viewport = Rc::downgrade(&viewport);
+    let ruler_state = ruler.clone();
+    let window_weak = main_window.as_weak();
+    main_window.on_toggle_ruler(move || {
+        let (Some(window), Some(board), Some(frame), Some(settings), Some(viewport)) = (
+            window_weak.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_settings.upgrade(),
+            weak_viewport.upgrade(),
+        ) else {
+            return;
+        };
+        let (Some(bounds), Some(frame)) = (board.borrow().clone(), frame.borrow().clone()) else {
+            return;
+        };
+        let settings = settings.borrow().clone();
+        let Some(transform) = measurement_transform(
+            &bounds,
+            &frame,
+            &settings,
+            (window.get_preview_width(), window.get_preview_height()),
+        ) else {
+            return;
+        };
+        let mut ruler = ruler_state.borrow_mut();
+        ruler.toggle();
+        update_ruler_ui(&window, &ruler, &transform, *viewport.borrow());
+    });
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
+    let weak_settings = Rc::downgrade(&current_settings);
+    let weak_viewport = Rc::downgrade(&viewport);
+    let toolpath = preview_scene.toolpath.clone();
+    let rapid_path = preview_scene.rapid_path.clone();
+    let cursor_toolpath = toolpath.clone();
+    let cursor_rapid_path = rapid_path.clone();
+    let ruler_state = ruler.clone();
+    let window_weak = main_window.as_weak();
+    main_window.on_ruler_click(move |x, y, width, height| {
+        let (Some(window), Some(board), Some(frame), Some(settings), Some(viewport)) = (
+            window_weak.upgrade(),
+            weak_board.upgrade(),
+            weak_frame.upgrade(),
+            weak_settings.upgrade(),
+            weak_viewport.upgrade(),
+        ) else {
+            return;
+        };
+        let (Some(bounds), Some(frame)) = (board.borrow().clone(), frame.borrow().clone()) else {
+            return;
+        };
+        let settings = settings.borrow().clone();
+        let Some(transform) = measurement_transform(&bounds, &frame, &settings, (width, height))
+        else {
+            return;
+        };
+        let camera = *viewport.borrow();
+        let Some(point) = transform.screen_to_world(camera, x as f64, y as f64) else {
+            return;
+        };
+        let toolpath = toolpath.borrow();
+        let rapid_path = rapid_path.borrow();
+        let point = snap_point(
+            point,
+            &transform,
+            camera,
+            &settings,
+            &[&toolpath, &rapid_path],
+        );
+        let mut ruler = ruler_state.borrow_mut();
+        ruler.place_point(point);
+        update_ruler_ui(&window, &ruler, &transform, camera);
+    });
+    let weak_board = Rc::downgrade(&board_bounds);
+    let weak_frame = Rc::downgrade(&frame_geometry);
     let weak_viewport = Rc::downgrade(&viewport);
     let weak_settings = Rc::downgrade(&current_settings);
     let window_weak = main_window.as_weak();
@@ -281,8 +527,17 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
         };
         let settings = settings_rc.borrow().clone();
         let camera = *viewport.borrow();
-        if let Some(text) = cursor_text(&bounds, &frame, &settings, camera, (x, y), (width, height))
-        {
+        let toolpath = cursor_toolpath.borrow();
+        let rapid_path = cursor_rapid_path.borrow();
+        if let Some(text) = cursor_text(
+            &bounds,
+            &frame,
+            &settings,
+            camera,
+            (x, y),
+            (width, height),
+            &[&toolpath, &rapid_path],
+        ) {
             window.set_cursor_coordinates(text.into());
         }
     });
