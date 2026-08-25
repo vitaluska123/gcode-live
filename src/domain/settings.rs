@@ -107,6 +107,10 @@ pub struct Settings {
     pub cut_depth: f64,
     #[serde(skip)]
     pub step_depth: f64,
+    /// Distinct progressive cutting depths read from the current source file.
+    /// This is runtime state: it must not be saved as an application preference.
+    #[serde(skip)]
+    pub source_cut_depths: Vec<f64>,
     #[serde(skip)]
     pub feed_rate: f64,
     #[serde(skip)]
@@ -273,6 +277,7 @@ impl Default for Settings {
             tool_diameter: 0.0,
             cut_depth: 0.0,
             step_depth: 0.0,
+            source_cut_depths: Vec::new(),
             feed_rate: 0.0,
             spindle_speed: 0.0,
         };

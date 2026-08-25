@@ -27,13 +27,13 @@ pub fn apply_source_cutting_parameters(content: &str, settings: &mut Settings) {
         }
     }
 
-    depths.sort_by(|left, right| left.total_cmp(right));
-    depths.dedup_by(|left, right| (*left - *right).abs() < 0.000_001);
-    if let Some(&deepest) = depths.last() {
+    let source_cut_depths = progressive_cut_depths(depths);
+    settings.source_cut_depths = source_cut_depths.clone();
+    if let Some(&deepest) = source_cut_depths.last() {
         settings.cut_depth = deepest;
     }
-    if depths.len() >= 2 {
-        let step = depths
+    if source_cut_depths.len() >= 2 {
+        let step = source_cut_depths
             .windows(2)
             .map(|pair| pair[1] - pair[0])
             .filter(|value| *value > 0.000_001)
@@ -41,9 +41,27 @@ pub fn apply_source_cutting_parameters(content: &str, settings: &mut Settings) {
         if let Some(step) = step {
             settings.step_depth = step;
         }
-    } else if let Some(&depth) = depths.first() {
+    } else if let Some(&depth) = source_cut_depths.first() {
         settings.step_depth = depth;
     }
+}
+
+/// Keep each newly reached cutting depth in source order.
+///
+/// Returning to a shallower depth is used for holding tabs and must not become
+/// an additional frame-cutting pass.
+fn progressive_cut_depths(depths: Vec<f64>) -> Vec<f64> {
+    const DEPTH_COMPARISON_TOLERANCE: f64 = 0.000_001;
+
+    let mut progressive_depths = Vec::new();
+    let mut deepest = 0.0;
+    for depth in depths {
+        if depth > deepest + DEPTH_COMPARISON_TOLERANCE {
+            progressive_depths.push(depth);
+            deepest = depth;
+        }
+    }
+    progressive_depths
 }
 
 /// Extract board bounds from G-code content.
@@ -267,5 +285,17 @@ mod tests {
         assert_eq!(settings.feed_rate, 150.0);
         assert_eq!(settings.cut_depth, 1.2);
         assert!((settings.step_depth - 0.4).abs() < 0.000_001);
+        assert_eq!(settings.source_cut_depths, vec![0.4, 0.8, 1.2]);
+    }
+
+    #[test]
+    fn ignores_tab_lifts_when_reading_source_cut_depths() {
+        let mut settings = Settings::default();
+        apply_source_cutting_parameters(
+            "G1 Z-0.3\nZ-0.6\nZ-0.3\nZ-0.9\nZ-0.6\nZ-1.0",
+            &mut settings,
+        );
+
+        assert_eq!(settings.source_cut_depths, vec![0.3, 0.6, 0.9, 1.0]);
     }
 }

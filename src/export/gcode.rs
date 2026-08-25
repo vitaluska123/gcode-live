@@ -1,6 +1,8 @@
 use crate::domain::frame::{top_tab_intervals, BoardBounds, FrameGeometry};
 use crate::domain::settings::Settings;
 
+const GCODE_DEPTH_DECIMAL_PLACES: usize = 3;
+
 /// Generate G-code for the frame cutting operation
 pub fn generate_frame_gcode(
     _bounds: &BoardBounds,
@@ -43,15 +45,17 @@ pub fn generate_frame_gcode(
         gcode.push_str("G0 Z5\nM5\nM30\n");
         return gcode;
     }
-    // A tiny floating-point residue (for example 1.8 / 0.36) must not create
-    // an extra, identical final pass.
-    let num_passes = ((cut_depth / step_depth) - 1e-9).ceil() as usize;
+    let depth_passes = if settings.source_cut_depths.is_empty() {
+        depth_passes(cut_depth, step_depth)
+    } else {
+        settings.source_cut_depths.clone()
+    };
 
-    for pass in 1..=num_passes {
-        let depth = (pass as f64 * step_depth).min(cut_depth);
+    for (pass_index, depth) in depth_passes.into_iter().enumerate() {
+        let first_pass = pass_index == 0;
 
         // Plunge to cut depth
-        if pass == 1 {
+        if first_pass {
             gcode.push_str(&format!("G1 Z-{depth:.3} F{}\n", settings.feed_rate as i64));
         } else {
             gcode.push_str(&format!("G1 Z-{depth:.3}\n"));
@@ -96,6 +100,30 @@ pub fn generate_frame_gcode(
     gcode.push_str("M30\n");
 
     gcode
+}
+
+/// Build the depths that are distinguishable in the exported G-code.
+///
+/// The controller receives depths rounded to three decimal places. A step such
+/// as 0.3333 mm can therefore produce both 0.9999 mm and 1.0 mm internally,
+/// while both commands become `Z-1.000`. Keep only one such pass.
+fn depth_passes(cut_depth: f64, step_depth: f64) -> Vec<f64> {
+    let estimated_passes = (cut_depth / step_depth).ceil() as usize;
+    let mut depths = Vec::with_capacity(estimated_passes);
+
+    for pass in 1..=estimated_passes {
+        let depth = (pass as f64 * step_depth).min(cut_depth);
+        let formatted_depth = format!("{depth:.GCODE_DEPTH_DECIMAL_PLACES$}");
+        let is_duplicate = depths.last().is_some_and(|previous: &f64| {
+            format!("{previous:.GCODE_DEPTH_DECIMAL_PLACES$}") == formatted_depth
+        });
+
+        if !is_duplicate {
+            depths.push(depth);
+        }
+    }
+
+    depths
 }
 
 #[allow(clippy::too_many_arguments)] // G-code segment coordinates are intentionally explicit.
@@ -266,6 +294,54 @@ mod tests {
         assert_eq!(gcode.matches("G0 Z2\n").count(), 9);
         assert_eq!(gcode.matches("Z0\n").count(), 9);
         assert!(!gcode.contains("G1 X"));
+    }
+
+    #[test]
+    fn export_does_not_repeat_the_final_depth_after_gcode_rounding() {
+        let frame = FrameGeometry {
+            left: 0.0,
+            right: 20.0,
+            bottom: 0.0,
+            top: 10.0,
+        };
+        let settings = Settings {
+            cut_depth: 1.0,
+            step_depth: 0.3333,
+            tool_diameter: 0.0,
+            tab_width: 0.0,
+            ..Settings::default()
+        };
+
+        let gcode = generate_frame_gcode(&BoardBounds::default(), &frame, &settings, None);
+
+        assert_eq!(gcode.matches("Z-1.000").count(), 1);
+        assert_eq!(gcode.matches("G1 Z-").count(), 3);
+    }
+
+    #[test]
+    fn export_preserves_each_source_cut_depth() {
+        let frame = FrameGeometry {
+            left: 0.0,
+            right: 20.0,
+            bottom: 0.0,
+            top: 10.0,
+        };
+        let settings = Settings {
+            cut_depth: 1.0,
+            step_depth: 0.5,
+            source_cut_depths: vec![0.3, 0.6, 0.9, 1.0],
+            tool_diameter: 0.0,
+            tab_width: 0.0,
+            ..Settings::default()
+        };
+
+        let gcode = generate_frame_gcode(&BoardBounds::default(), &frame, &settings, None);
+
+        assert_eq!(gcode.matches("G1 Z-").count(), 4);
+        assert!(gcode.contains("G1 Z-0.300 F120"));
+        assert!(gcode.contains("G1 Z-0.600\n"));
+        assert!(gcode.contains("G1 Z-0.900\n"));
+        assert!(gcode.contains("G1 Z-1.000\n"));
     }
 
     #[test]
