@@ -11,7 +11,7 @@
     }
   },
   "coordinates": {
-    "local_origin_enabled": true,
+    "local_origin_enabled": false,
     "local_origin_x": -40.0,
     "local_origin_y": 6.0
   },
@@ -39,8 +39,8 @@
     },
     "local_axes": {
       "visible": true,
-      "x_color": "#dc4626",
-      "y_color": "#46d228"
+      "x_color": "#dc464688",
+      "y_color": "#46d27888"
     },
     "material": {
       "outline": {
@@ -53,7 +53,7 @@
       },
       "margin_hatch": {
         "visible": true,
-        "color": "#ff4646"
+        "color": "#ff4646ff"
       }
     },
     "source": {

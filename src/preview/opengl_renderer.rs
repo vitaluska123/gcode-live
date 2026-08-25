@@ -130,15 +130,19 @@ impl GpuTarget {
             self.gl
                 .viewport(0, 0, frame.width as i32, frame.height as i32);
             self.gl.clear_color(
-                prepared.background[0],
-                prepared.background[1],
-                prepared.background[2],
+                prepared.background[0] * prepared.background[3],
+                prepared.background[1] * prepared.background[3],
+                prepared.background[2] * prepared.background[3],
                 prepared.background[3],
             );
             self.gl.clear(glow::COLOR_BUFFER_BIT);
             self.gl.enable(glow::BLEND);
-            self.gl
-                .blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            self.gl.blend_func_separate(
+                glow::ONE,
+                glow::ONE_MINUS_SRC_ALPHA,
+                glow::ONE,
+                glow::ONE_MINUS_SRC_ALPHA,
+            );
             self.gl.use_program(Some(self.program));
             self.gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vertices));
             self.gl.buffer_data_u8_slice(
@@ -234,6 +238,10 @@ struct OpenGlState {
     array_buffer: Option<glow::NativeBuffer>,
     texture_2d: Option<glow::NativeTexture>,
     blend_enabled: bool,
+    blend_src_rgb: u32,
+    blend_dst_rgb: u32,
+    blend_src_alpha: u32,
+    blend_dst_alpha: u32,
 }
 
 impl OpenGlState {
@@ -244,6 +252,10 @@ impl OpenGlState {
             array_buffer: buffer_handle(gl.get_parameter_i32(glow::ARRAY_BUFFER_BINDING)),
             texture_2d: texture_handle(gl.get_parameter_i32(glow::TEXTURE_BINDING_2D)),
             blend_enabled: gl.is_enabled(glow::BLEND),
+            blend_src_rgb: gl.get_parameter_i32(glow::BLEND_SRC_RGB) as u32,
+            blend_dst_rgb: gl.get_parameter_i32(glow::BLEND_DST_RGB) as u32,
+            blend_src_alpha: gl.get_parameter_i32(glow::BLEND_SRC_ALPHA) as u32,
+            blend_dst_alpha: gl.get_parameter_i32(glow::BLEND_DST_ALPHA) as u32,
         }
     }
 
@@ -252,6 +264,12 @@ impl OpenGlState {
         gl.use_program(self.program);
         gl.bind_buffer(glow::ARRAY_BUFFER, self.array_buffer);
         gl.bind_texture(glow::TEXTURE_2D, self.texture_2d);
+        gl.blend_func_separate(
+            self.blend_src_rgb,
+            self.blend_dst_rgb,
+            self.blend_src_alpha,
+            self.blend_dst_alpha,
+        );
         if self.blend_enabled {
             gl.enable(glow::BLEND);
         } else {
@@ -279,7 +297,7 @@ fn texture_handle(value: i32) -> Option<glow::NativeTexture> {
 fn create_program(gl: &glow::Context) -> Result<glow::NativeProgram, ()> {
     const VERTEX: &str = "attribute vec2 a_position; attribute vec4 a_color; uniform vec2 u_view_size; varying vec4 v_color; void main() { vec2 clip = vec2(a_position.x / u_view_size.x * 2.0 - 1.0, 1.0 - a_position.y / u_view_size.y * 2.0); gl_Position = vec4(clip, 0.0, 1.0); v_color = a_color; }";
     const FRAGMENT: &str =
-        "precision mediump float; varying vec4 v_color; void main() { gl_FragColor = v_color; }";
+        "precision mediump float; varying vec4 v_color; void main() { gl_FragColor = vec4(v_color.rgb * v_color.a, v_color.a); }";
     // SAFETY: the program is created while Slint's OpenGL context is current.
     unsafe {
         let vertex = compile_shader(gl, glow::VERTEX_SHADER, VERTEX)?;
@@ -384,6 +402,7 @@ impl PreparedGeometry {
                 frame.viewport.pan_x,
                 frame.viewport.pan_y,
                 color_f32(&settings.grid_color, [42, 48, 58, 255]),
+                color_f32(&settings.grid_label_color, [150, 160, 175, 255]),
                 &map,
             );
         }
@@ -611,7 +630,8 @@ fn add_grid(
     height: u32,
     pan_x: f64,
     pan_y: f64,
-    c: [f32; 4],
+    line_color: [f32; 4],
+    label_color: [f32; 4],
     map: &impl Fn((f64, f64)) -> (f32, f32),
 ) {
     if scale <= 0. {
@@ -625,7 +645,12 @@ fn add_grid(
     let last_x = ((min_x + (width as f64 - base_x) / scale) / step).ceil() as i64;
     for i in first_x..=last_x {
         let x = i as f64 * step;
-        add_segment(out, map((x, min_y - 100000.)), map((x, max_y + 100000.)), c);
+        add_segment(
+            out,
+            map((x, min_y - 100000.)),
+            map((x, max_y + 100000.)),
+            line_color,
+        );
         add_grid_label(
             out,
             (
@@ -633,19 +658,24 @@ fn add_grid(
                 height as f32 - 11.0,
             ),
             x,
-            c,
+            label_color,
         );
     }
     let first_y = ((min_y + (base_y - height as f64) / scale) / step).floor() as i64;
     let last_y = ((min_y + base_y / scale) / step).ceil() as i64;
     for i in first_y..=last_y {
         let y = i as f64 * step;
-        add_segment(out, map((min_x - 100000., y)), map((max_x + 100000., y)), c);
+        add_segment(
+            out,
+            map((min_x - 100000., y)),
+            map((max_x + 100000., y)),
+            line_color,
+        );
         add_grid_label(
             out,
             (3.0, base_y as f32 - (y - min_y) as f32 * scale as f32 - 9.0),
             y,
-            c,
+            label_color,
         );
     }
 }
