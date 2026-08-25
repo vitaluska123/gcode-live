@@ -36,9 +36,9 @@ impl ToolOffsetInputs {
         ToolOffsetResults {
             program_zero_x: material_offset_x + material_edge_margin_x,
             program_zero_y: material_offset_y + material_edge_margin_y,
-            program_home_x: REFERENCE_OFFSET_MM,
-            program_home_y: REFERENCE_OFFSET_MM,
-            material_offset_x,
+            program_home_x: 1.476,
+            program_home_y: 1.476,
+            material_offset_x: 0.0 - material_offset_x,
             material_offset_y,
             material_edge_margin_x,
             material_edge_margin_y,
