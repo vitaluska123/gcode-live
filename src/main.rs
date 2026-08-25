@@ -32,18 +32,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .backend_name("gl".into())
         .select()?;
     let main_window = MainWindow::new()?;
-    set_window_icon(&main_window)?;
+    let icon_window = main_window.clone_strong();
+    slint::Timer::single_shot(std::time::Duration::from_millis(50), move || {
+        if let Err(error) = set_window_icon(icon_window.window()) {
+            eprintln!("Warning: Could not set main window icon: {error}");
+        }
+    });
     app::run(main_window)
 }
 
 /// Use the supplied PNG at runtime so the window, taskbar and Alt+Tab entry
 /// show the same application logo.
-fn set_window_icon(main_window: &MainWindow) -> Result<(), Box<dyn std::error::Error>> {
+fn set_window_icon(window: &slint::Window) -> Result<(), Box<dyn std::error::Error>> {
     let image = image::load_from_memory(include_bytes!("../icons/GcodeFrameGen.png"))?.into_rgba8();
     let (width, height) = image.dimensions();
     let icon = Icon::from_rgba(image.into_raw(), width, height)?;
-    main_window
-        .window()
-        .with_winit_window(|window| window.set_window_icon(Some(icon)));
+    window.with_winit_window(|native_window| native_window.set_window_icon(Some(icon)));
     Ok(())
 }

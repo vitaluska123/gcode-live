@@ -260,6 +260,9 @@ pub(crate) fn install_settings_window_callbacks(
         if let Err(error) = settings_window.show() {
             main_window
                 .invoke_show_error(format!("Failed to open settings window: {error}").into());
+        } else if let Err(error) = crate::set_window_icon(settings_window.window()) {
+            main_window
+                .invoke_show_error(format!("Failed to set settings window icon: {error}").into());
         }
     });
 }

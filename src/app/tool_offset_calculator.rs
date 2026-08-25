@@ -55,6 +55,10 @@ pub(crate) fn install_callbacks(
         if let Err(error) = calculator_window.show() {
             main_window
                 .invoke_show_error(format!("Failed to open offset calculator: {error}").into());
+        } else if let Err(error) = crate::set_window_icon(calculator_window.window()) {
+            main_window.invoke_show_error(
+                format!("Failed to set offset calculator window icon: {error}").into(),
+            );
         }
     });
 }
