@@ -362,15 +362,24 @@ impl PreparedGeometry {
         };
         let settings = &frame.settings;
         let (shift_x, shift_y) = settings.local_offset();
+        let expanded = frame::FrameGeometry::expanded(bounds, settings);
         let data = PreviewData::from_bounds_with_material(
             bounds.x_min + shift_x,
             bounds.x_max + shift_x,
             bounds.y_min + shift_y,
             bounds.y_max + shift_y,
-            frame_geometry.left + shift_x,
-            frame_geometry.right + shift_x,
-            frame_geometry.bottom + shift_y,
-            frame_geometry.top + shift_y,
+            expanded.as_ref().map_or(frame_geometry.left, |value| {
+                frame_geometry.left.min(value.left)
+            }) + shift_x,
+            expanded.as_ref().map_or(frame_geometry.right, |value| {
+                frame_geometry.right.max(value.right)
+            }) + shift_x,
+            expanded.as_ref().map_or(frame_geometry.bottom, |value| {
+                frame_geometry.bottom.min(value.bottom)
+            }) + shift_y,
+            expanded.as_ref().map_or(frame_geometry.top, |value| {
+                frame_geometry.top.max(value.top)
+            }) + shift_y,
             settings.material_width,
             settings.material_height,
             settings.material_offset_x,

@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "calculation": {
-    "frame_offset_x": 4.77,
+    "frame_offset_x": 4.777,
     "frame_offset_y": 4.79,
     "tabs": {
       "width": 3.0,

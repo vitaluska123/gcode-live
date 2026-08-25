@@ -136,6 +136,42 @@ fn nice_grid_step(target: f64) -> f64 {
         .unwrap_or(base * 10.0)
 }
 
+fn geometry_paths(
+    bounds: &BoardBounds,
+    frame: &FrameGeometry,
+    settings: &Settings,
+) -> Vec<Vec<(f64, f64)>> {
+    let (shift_x, shift_y) = settings.local_offset();
+    let rectangle = |left, right, bottom, top| {
+        vec![
+            (left, bottom),
+            (right, bottom),
+            (right, top),
+            (left, top),
+            (left, bottom),
+        ]
+    };
+    let mut paths = vec![
+        rectangle(bounds.x_min, bounds.x_max, bounds.y_min, bounds.y_max),
+        rectangle(frame.left, frame.right, frame.bottom, frame.top),
+    ];
+    if let Some(expanded) = FrameGeometry::expanded(bounds, settings) {
+        paths.push(rectangle(
+            expanded.left,
+            expanded.right,
+            expanded.bottom,
+            expanded.top,
+        ));
+    }
+    paths.push(rectangle(
+        settings.material_offset_x - settings.material_width - shift_x,
+        settings.material_offset_x - shift_x,
+        settings.material_offset_y - shift_y,
+        settings.material_offset_y + settings.material_height - shift_y,
+    ));
+    paths
+}
+
 fn snap_point(
     point: (f64, f64),
     transform: &PreviewTransform,
@@ -216,6 +252,10 @@ fn update_ruler_ui(
     window.set_ruler_start_y(start_y as f32);
     window.set_ruler_end_x(end_x as f32);
     window.set_ruler_end_y(end_y as f32);
+    let delta_x = end_x - start_x;
+    let delta_y = end_y - start_y;
+    window.set_ruler_line_length(delta_x.hypot(delta_y) as f32);
+    window.set_ruler_line_angle(delta_y.atan2(delta_x).to_degrees() as f32);
     window.set_ruler_distance(format!("{:.3} мм", (end.0 - start.0).hypot(end.1 - start.1)).into());
 }
 
@@ -490,13 +530,10 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
         };
         let toolpath = toolpath.borrow();
         let rapid_path = rapid_path.borrow();
-        let point = snap_point(
-            point,
-            &transform,
-            camera,
-            &settings,
-            &[&toolpath, &rapid_path],
-        );
+        let geometry = geometry_paths(&bounds, &frame, &settings);
+        let mut paths = vec![toolpath.as_slice(), rapid_path.as_slice()];
+        paths.extend(geometry.iter().map(Vec::as_slice));
+        let point = snap_point(point, &transform, camera, &settings, &paths);
         let mut ruler = ruler_state.borrow_mut();
         ruler.place_point(point);
         update_ruler_ui(&window, &ruler, &transform, camera);
@@ -529,6 +566,9 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
         let camera = *viewport.borrow();
         let toolpath = cursor_toolpath.borrow();
         let rapid_path = cursor_rapid_path.borrow();
+        let geometry = geometry_paths(&bounds, &frame, &settings);
+        let mut paths = vec![toolpath.as_slice(), rapid_path.as_slice()];
+        paths.extend(geometry.iter().map(Vec::as_slice));
         if let Some(text) = cursor_text(
             &bounds,
             &frame,
@@ -536,7 +576,7 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
             camera,
             (x, y),
             (width, height),
-            &[&toolpath, &rapid_path],
+            &paths,
         ) {
             window.set_cursor_coordinates(text.into());
         }

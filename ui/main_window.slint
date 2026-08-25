@@ -34,6 +34,8 @@ export component MainWindow inherits Window {
     in-out property <float> ruler_start_y: 0.0;
     in-out property <float> ruler_end_x: 0.0;
     in-out property <float> ruler_end_y: 0.0;
+    in-out property <float> ruler_line_length: 0.0;
+    in-out property <float> ruler_line_angle: 0.0;
     in-out property <string> ruler_distance: "";
     in-out property <int> active_tab: 0;
     in-out property <string> source_gcode: "";
@@ -154,6 +156,8 @@ export component MainWindow inherits Window {
                             ruler_start_y: root.ruler_start_y;
                             ruler_end_x: root.ruler_end_x;
                             ruler_end_y: root.ruler_end_y;
+                            ruler_line_length: root.ruler_line_length;
+                            ruler_line_angle: root.ruler_line_angle;
                             ruler_distance: root.ruler_distance;
                             file_loaded: root.file_loaded;
                             open_file => { root.open_tap_file(); }
