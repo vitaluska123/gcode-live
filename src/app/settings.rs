@@ -222,12 +222,27 @@ pub(crate) fn install_settings_window_callbacks(
         main_window.invoke_update_preview();
     });
 
+    let settings_window_weak = settings_window.as_weak();
     let main_window_weak = main_window.as_weak();
+    let settings_weak = Rc::downgrade(&app_state.settings);
     settings_window.on_save_settings(move || {
-        let Some(main_window) = main_window_weak.upgrade() else {
+        let (Some(settings_window), Some(main_window), Some(settings)) = (
+            settings_window_weak.upgrade(),
+            main_window_weak.upgrade(),
+            settings_weak.upgrade(),
+        ) else {
             return;
         };
-        main_window.invoke_save_settings();
+        let new_settings = read_ui(
+            settings_window.global::<UiSettings>(),
+            settings.borrow().clone(),
+        );
+        if let Err(error) = new_settings.save() {
+            main_window.invoke_show_error(format!("Failed to save settings: {error}").into());
+            return;
+        }
+        *settings.borrow_mut() = new_settings.clone();
+        initialize_ui(main_window.global::<UiSettings>(), &new_settings);
     });
 
     let settings_window = settings_window.clone_strong();

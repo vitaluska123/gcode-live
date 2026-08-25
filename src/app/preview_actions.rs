@@ -31,6 +31,7 @@ pub(crate) fn install_pan_callbacks(
             .pan_to(&mut viewport.borrow_mut(), x as f64, y as f64);
         if let Some(window) = window_weak.upgrade() {
             window.invoke_update_preview();
+            window.window().request_redraw();
         }
     });
 }
@@ -191,6 +192,7 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
         transform.zoom_at(&mut camera, direction, mouse_x as f64, mouse_y as f64);
         *viewport_state.borrow_mut() = camera;
         window.invoke_update_preview();
+        window.window().request_redraw();
     });
     let viewport_state = viewport.clone();
     let weak_board = Rc::downgrade(&board_bounds);
@@ -250,6 +252,7 @@ pub(crate) fn install_callbacks(main_window: &MainWindow, app_state: &crate::app
             pan_y: height / 2.0 - screen_y,
         };
         window.invoke_update_preview();
+        window.window().request_redraw();
     });
     install_pan_callbacks(main_window, preview_input.clone(), viewport.clone());
     let weak_board = Rc::downgrade(&board_bounds);
