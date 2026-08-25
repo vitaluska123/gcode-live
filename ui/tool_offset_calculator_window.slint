@@ -1,0 +1,85 @@
+import { Button, GroupBox, LineEdit } from "std-widgets.slint";
+import { ApplyingLineEdit } from "components/applying_line_edit.slint";
+import { Theme } from "styles/theme.slint";
+
+component NumericInput inherits ApplyingLineEdit {
+    preferred-width: Theme.field_width;
+}
+
+component ResultField inherits LineEdit {
+    read-only: true;
+    preferred-width: Theme.field_width;
+}
+
+export component ToolOffsetCalculatorWindow inherits Window {
+    min-width: 620px;
+    min-height: 560px;
+    preferred-width: 680px;
+    preferred-height: 700px;
+    title: "Расчёт отступов";
+
+    in-out property <string> mill_diameter: "3.175";
+    in-out property <string> material_thickness: "1.5";
+    in-out property <string> indicator_x: "0";
+    in-out property <string> indicator_y: "0";
+    in-out property <string> clamp_x: "0";
+    in-out property <string> clamp_y: "0";
+    in-out property <string> safety_x: "0";
+    in-out property <string> safety_y: "0";
+    in-out property <string> program_zero_x: "";
+    in-out property <string> program_zero_y: "";
+    in-out property <string> program_home_x: "";
+    in-out property <string> program_home_y: "";
+    in-out property <string> material_offset_x: "";
+    in-out property <string> material_offset_y: "";
+    in-out property <string> material_edge_margin_x: "";
+    in-out property <string> material_edge_margin_y: "";
+    callback recalculate();
+    callback apply_results();
+
+    VerticalLayout {
+        padding: 12px;
+        spacing: 12px;
+
+        GroupBox {
+            title: "Входные данные";
+            VerticalLayout {
+                spacing: 6px;
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Диаметр фрезы (мм):"; vertical-alignment: center; } NumericInput { text <=> root.mill_diameter; accepted => { root.recalculate(); } } }
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Толщина текстолита (мм):"; vertical-alignment: center; } NumericInput { text <=> root.material_thickness; accepted => { root.recalculate(); } } }
+                Text { text: "Расстояние от концевика до центра фрезы (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Индикатор X:"; vertical-alignment: center; } NumericInput { text <=> root.indicator_x; accepted => { root.recalculate(); } } Text { text: "Индикатор Y:"; vertical-alignment: center; } NumericInput { text <=> root.indicator_y; accepted => { root.recalculate(); } } }
+                Text { text: "Нажим зажимов на текстолит (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Зажим X:"; vertical-alignment: center; } NumericInput { text <=> root.clamp_x; accepted => { root.recalculate(); } } Text { text: "Зажим Y:"; vertical-alignment: center; } NumericInput { text <=> root.clamp_y; accepted => { root.recalculate(); } } }
+                Text { text: "Безопасный зазор от края зажима (мм)"; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Зазор X:"; vertical-alignment: center; } NumericInput { text <=> root.safety_x; accepted => { root.recalculate(); } } Text { text: "Зазор Y:"; vertical-alignment: center; } NumericInput { text <=> root.safety_y; accepted => { root.recalculate(); } } }
+            }
+        }
+
+        GroupBox {
+            title: "Данные для Gerber2Gcode";
+            VerticalLayout {
+                spacing: 6px;
+                Text { text: "Поля результата можно выделить и скопировать."; color: Theme.secondary_text; font-size: 12px; vertical-stretch: 0; }
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Нуль УП X:"; vertical-alignment: center; } ResultField { text: root.program_zero_x; } Text { text: "Нуль УП Y:"; vertical-alignment: center; } ResultField { text: root.program_zero_y; } }
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Дом УП X:"; vertical-alignment: center; } ResultField { text: root.program_home_x; } Text { text: "Дом УП Y:"; vertical-alignment: center; } ResultField { text: root.program_home_y; } }
+            }
+        }
+
+        GroupBox {
+            title: "Данные для настроек просчёта";
+            VerticalLayout {
+                spacing: 6px;
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ текстолита X:"; vertical-alignment: center; } ResultField { text: root.material_offset_x; } Text { text: "Отступ текстолита Y:"; vertical-alignment: center; } ResultField { text: root.material_offset_y; } }
+                HorizontalLayout { vertical-stretch: 0; Text { text: "Отступ от края X:"; vertical-alignment: center; } ResultField { text: root.material_edge_margin_x; } Text { text: "Отступ от края Y:"; vertical-alignment: center; } ResultField { text: root.material_edge_margin_y; } }
+            }
+        }
+
+        HorizontalLayout {
+            vertical-stretch: 0;
+            Rectangle { horizontal-stretch: 1; }
+            Button { text: "Применить в настройки просчёта"; clicked => { root.apply_results(); } }
+            Button { text: "Закрыть"; clicked => { root.hide(); } }
+        }
+    }
+}

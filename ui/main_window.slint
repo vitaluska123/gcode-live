@@ -10,6 +10,7 @@ import {
 
 export { UiSettings }
 export { SettingsWindow }from "settings_window.slint";
+export { ToolOffsetCalculatorWindow } from "tool_offset_calculator_window.slint";
 
 export component MainWindow inherits Window {
     min-width: 800px;
@@ -43,6 +44,7 @@ export component MainWindow inherits Window {
     in-out property <string> final_gcode: "";
     callback open_tap_file();
     callback open_settings();
+    callback open_offset_calculator();
     callback save_settings();
     callback export_tap();
     callback show_error(string);
@@ -83,6 +85,11 @@ export component MainWindow inherits Window {
             MenuItem {
                 title: root.ruler_active ? "Линейка: включена" : "Линейка";
                 activated => { root.toggle_ruler(); }
+            }
+
+            MenuItem {
+                title: "Расчёт отступов";
+                activated => { root.open_offset_calculator(); }
             }
         }
 

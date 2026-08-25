@@ -1,12 +1,15 @@
 use slint::ComponentHandle;
 
-use crate::{domain::settings::Settings, MainWindow, SettingsWindow, UiSettings};
+use crate::{
+    domain::settings::Settings, MainWindow, SettingsWindow, ToolOffsetCalculatorWindow, UiSettings,
+};
 
 mod export_actions;
 mod file_actions;
 mod preview_actions;
 mod settings;
 mod state;
+mod tool_offset_calculator;
 
 use state::AppState;
 
@@ -22,10 +25,12 @@ pub fn run(main_window: MainWindow) -> Result<(), Box<dyn std::error::Error>> {
     settings::initialize_ui(main_window.global::<UiSettings>(), &settings);
     let settings_window = SettingsWindow::new()?;
     settings::initialize_ui(settings_window.global::<UiSettings>(), &settings);
+    let calculator_window = ToolOffsetCalculatorWindow::new()?;
 
     let state = AppState::new(settings);
     settings::install_callbacks(&main_window, &state);
     settings::install_settings_window_callbacks(&main_window, &settings_window, &state);
+    tool_offset_calculator::install_callbacks(&main_window, &calculator_window, &state);
     file_actions::install_callbacks(&main_window, &state);
     preview_actions::install_callbacks(&main_window, &state);
     export_actions::install_callbacks(&main_window, &state);

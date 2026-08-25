@@ -9,6 +9,7 @@ mod domain {
     pub mod frame;
     pub mod gcode;
     pub mod settings;
+    pub mod tool_offset_calculator;
 }
 mod export {
     pub mod gcode;

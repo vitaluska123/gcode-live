@@ -1,8 +1,8 @@
 {
   "schema_version": 2,
   "calculation": {
-    "frame_offset_x": 4.777,
-    "frame_offset_y": 4.79,
+    "frame_offset_x": 5.564,
+    "frame_offset_y": 5.564,
     "tabs": {
       "width": 3.0,
       "minimum_count": 3,
@@ -19,10 +19,10 @@
   "material": {
     "width": 150.0,
     "height": 150.0,
-    "offset_x": -8.0,
-    "offset_y": 3.0,
-    "edge_margin_x": 2.0,
-    "edge_margin_y": 2.0
+    "offset_x": -6.428,
+    "offset_y": 1.168,
+    "edge_margin_x": 4.0,
+    "edge_margin_y": 4.0
   },
   "display": {
     "background": {
