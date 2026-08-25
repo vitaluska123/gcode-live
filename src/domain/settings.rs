@@ -546,18 +546,18 @@ impl Settings {
         let mut saved = self.clone();
         saved.sync_persisted();
         saved.schema_version = CURRENT_SCHEMA_VERSION;
-        saved.calculation.frame_offset_x = round_two(saved.calculation.frame_offset_x);
-        saved.calculation.frame_offset_y = round_two(saved.calculation.frame_offset_y);
-        saved.calculation.tabs.width = round_two(saved.calculation.tabs.width);
-        saved.calculation.tabs.maximum_gap = round_two(saved.calculation.tabs.maximum_gap);
-        saved.coordinates.local_origin_x = round_two(saved.coordinates.local_origin_x);
-        saved.coordinates.local_origin_y = round_two(saved.coordinates.local_origin_y);
-        saved.material.width = round_two(saved.material.width);
-        saved.material.height = round_two(saved.material.height);
-        saved.material.offset_x = round_two(saved.material.offset_x);
-        saved.material.offset_y = round_two(saved.material.offset_y);
-        saved.material.edge_margin_x = round_two(saved.material.edge_margin_x);
-        saved.material.edge_margin_y = round_two(saved.material.edge_margin_y);
+        saved.calculation.frame_offset_x = round_six(saved.calculation.frame_offset_x);
+        saved.calculation.frame_offset_y = round_six(saved.calculation.frame_offset_y);
+        saved.calculation.tabs.width = round_six(saved.calculation.tabs.width);
+        saved.calculation.tabs.maximum_gap = round_six(saved.calculation.tabs.maximum_gap);
+        saved.coordinates.local_origin_x = round_six(saved.coordinates.local_origin_x);
+        saved.coordinates.local_origin_y = round_six(saved.coordinates.local_origin_y);
+        saved.material.width = round_six(saved.material.width);
+        saved.material.height = round_six(saved.material.height);
+        saved.material.offset_x = round_six(saved.material.offset_x);
+        saved.material.offset_y = round_six(saved.material.offset_y);
+        saved.material.edge_margin_x = round_six(saved.material.edge_margin_x);
+        saved.material.edge_margin_y = round_six(saved.material.edge_margin_y);
         let content = serde_json::to_string_pretty(&saved)
             .map_err(|e| SettingsError::Serialize(e.to_string()))?;
         std::fs::write("settings.json", content).map_err(|e| SettingsError::Write(e.to_string()))
@@ -743,8 +743,9 @@ impl LegacySettings {
     }
 }
 
-fn round_two(value: f64) -> f64 {
-    (value * 100.0).round() / 100.0
+fn round_six(value: f64) -> f64 {
+    const DECIMAL_PLACES: f64 = 1_000_000.0;
+    (value * DECIMAL_PLACES).round() / DECIMAL_PLACES
 }
 fn default_true() -> bool {
     true
@@ -819,6 +820,11 @@ pub enum SettingsError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preserves_six_decimal_places_when_persisting_values() {
+        assert_eq!(round_six(12.123_456_7), 12.123_457);
+    }
 
     #[test]
     fn legacy_settings_are_converted_to_the_nested_schema() {
